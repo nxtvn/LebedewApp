@@ -235,6 +235,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       key: widget.formKey,
       child: SingleChildScrollView(
         controller: _scrollController,
+        physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(
           AppConstants.defaultPadding,
           AppConstants.defaultPadding,
@@ -444,8 +445,15 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                   CupertinoButton(
                     child: const Text('Fertig'),
                     onPressed: () {
-                      _updateRequestType(RequestType.values[selectedIndex]);
+                      // Auswahl aktualisieren ohne Scrollposition zu verändern
+                      final selectedType = RequestType.values[selectedIndex];
                       Navigator.pop(context);
+                      // Verzögerung hinzufügen, damit die Änderung erst nach dem Schließen des Dialogs erfolgt
+                      Future.delayed(Duration.zero, () {
+                        if (mounted) {
+                          _updateRequestType(selectedType);
+                        }
+                      });
                     },
                   ),
                 ],
