@@ -56,6 +56,8 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   RequestType? _selectedType;
   UrgencyLevel? _selectedUrgencyLevel;
   DateTime? _selectedDate;
+  double _ratingValue = 0.0; // Für CupertinoSlider
+  bool _isLoading = false; // Für CupertinoActivityIndicator
   
   final List<File> _images = [];
   final ScrollController _scrollController = ScrollController();
@@ -202,13 +204,29 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     final picker = ImagePicker();
     
-    if (source == ImageSource.gallery) {
-      final List<XFile> pickedFiles = await picker.pickMultiImage();
-      if (pickedFiles.isNotEmpty && mounted) {
-        for (final file in pickedFiles) {
-          final imageFile = File(file.path);
+    try {
+      if (source == ImageSource.gallery) {
+        final List<XFile> pickedFiles = await picker.pickMultiImage();
+        if (pickedFiles.isNotEmpty && mounted) {
+          for (final file in pickedFiles) {
+            final imageFile = File(file.path);
+            setState(() {
+              _images.add(imageFile);
+            });
+            final path = await _viewModel.repository.saveImage(imageFile);
+            _viewModel.addImagePath(path);
+          }
+        }
+      } else {
+        final XFile? pickedFile = await picker.pickImage(source: source);
+        if (pickedFile != null && mounted) {
+          final imageFile = File(pickedFile.path);
           setState(() {
             _images.add(imageFile);
           });
@@ -216,15 +234,11 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           _viewModel.addImagePath(path);
         }
       }
-    } else {
-      final XFile? pickedFile = await picker.pickImage(source: source);
-      if (pickedFile != null && mounted) {
-        final imageFile = File(pickedFile.path);
+    } finally {
+      if (mounted) {
         setState(() {
-          _images.add(imageFile);
+          _isLoading = false;
         });
-        final path = await _viewModel.repository.saveImage(imageFile);
-        _viewModel.addImagePath(path);
       }
     }
   }
@@ -247,11 +261,11 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           children: [
             _buildRequestTypeSection(),
             const SizedBox(height: AppConstants.defaultPadding),
-            _buildPersonalData(),
+            Platform.isIOS ? _buildCupertinoPersonalData() : _buildPersonalData(),
             const SizedBox(height: AppConstants.defaultPadding),
-            _buildDeviceData(),
+            Platform.isIOS ? _buildCupertinoDeviceData() : _buildDeviceData(),
             const SizedBox(height: AppConstants.defaultPadding),
-            _buildTroubleDescription(),
+            Platform.isIOS ? _buildCupertinoTroubleDescription() : _buildTroubleDescription(),
             const SizedBox(height: AppConstants.defaultPadding),
             _buildUrgencySection(),
           ],
@@ -488,237 +502,339 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  Widget _buildPersonalData() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withAlpha(51)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.defaultPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(
-              'Persönliche Daten',
-              'Ihre Kontaktinformationen',
-            ),
-            TextFormField(
-              controller: _nameController,
-              focusNode: _nameFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Name *',
-                hintText: 'Ihr vollständiger Name',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _emailFocus.requestFocus(),
-              validator: (value) => Validators.validateRequired(value, 'Name'),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _emailController,
-              focusNode: _emailFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'E-Mail *',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
-              validator: Validators.validateEmail,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _phoneController,
-              focusNode: _phoneFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Telefon (optional)',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _addressFocus.requestFocus(),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _addressController,
-              focusNode: _addressFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Adresse (optional)',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _deviceModelFocus.requestFocus(),
-              maxLines: 2,
-            ),
-          ],
+  // Cupertino-Implementierung für persönliche Daten
+  Widget _buildCupertinoPersonalData() {
+    return CupertinoFormSection.insetGrouped(
+      header: Text(
+        'Persönliche Daten',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: CupertinoColors.activeBlue,
         ),
       ),
+      footer: Text(
+        'Ihre Kontaktinformationen',
+        style: TextStyle(color: CupertinoColors.systemGrey),
+      ),
+      children: [
+        CupertinoFormRow(
+          prefix: const Text('Name *'),
+          child: CupertinoTextField(
+            controller: _nameController,
+            placeholder: 'Ihr vollständiger Name',
+            onSubmitted: (_) => _emailFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('E-Mail *'),
+          child: CupertinoTextField(
+            controller: _emailController,
+            placeholder: 'Ihre E-Mail-Adresse',
+            keyboardType: TextInputType.emailAddress,
+            focusNode: _emailFocus,
+            onSubmitted: (_) => _phoneFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Telefon'),
+          child: CupertinoTextField(
+            controller: _phoneController,
+            placeholder: 'Ihre Telefonnummer',
+            keyboardType: TextInputType.phone,
+            focusNode: _phoneFocus,
+            onSubmitted: (_) => _addressFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Adresse'),
+          child: CupertinoTextField(
+            controller: _addressController,
+            placeholder: 'Ihre Adresse',
+            focusNode: _addressFocus,
+            onSubmitted: (_) => _deviceModelFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+            maxLines: 2,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildDeviceData() {
+  // Cupertino-Implementierung für Gerätedaten
+  Widget _buildCupertinoDeviceData() {
     // Formatiere das Datum im deutschen Format
     final dateFormatter = DateFormat.yMd();
     final String dateText = _selectedDate != null
         ? dateFormatter.format(_selectedDate!)
         : 'Bitte wählen Sie ein Datum';
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withAlpha(51)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.defaultPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(
-              'Gerätedaten',
-              'Informationen zum betroffenen Gerät',
-            ),
-            TextFormField(
-              controller: _deviceModelController,
-              focusNode: _deviceModelFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Gerätemodell',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _manufacturerFocus.requestFocus(),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _manufacturerController,
-              focusNode: _manufacturerFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Hersteller',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _serialNumberFocus.requestFocus(),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _serialNumberController,
-              focusNode: _serialNumberFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Seriennummer',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _errorCodeFocus.requestFocus(),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _errorCodeController,
-              focusNode: _errorCodeFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Fehlermeldung/Fehlercode',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _serviceHistoryFocus.requestFocus(),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _serviceHistoryController,
-              focusNode: _serviceHistoryFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Servicehistorie',
-                hintText: 'Letzte Wartungen oder Reparaturen',
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _descriptionFocus.requestFocus(),
-              maxLines: 2,
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            InkWell(
-              onTap: _showDatePicker,
-              child: InputDecorator(
-                decoration: AppTheme.inputDecoration.copyWith(
-                  labelText: 'Datum des Vorfalls',
-                ),
-                child: Text(dateText),
-              ),
-            ),
-          ],
+    return CupertinoFormSection.insetGrouped(
+      header: Text(
+        'Gerätedaten',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: CupertinoColors.activeBlue,
         ),
       ),
+      footer: Text(
+        'Informationen zum betroffenen Gerät',
+        style: TextStyle(color: CupertinoColors.systemGrey),
+      ),
+      children: [
+        CupertinoFormRow(
+          prefix: const Text('Gerätemodell'),
+          child: CupertinoTextField(
+            controller: _deviceModelController,
+            placeholder: 'z.B. iPhone 13',
+            focusNode: _deviceModelFocus,
+            onSubmitted: (_) => _manufacturerFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Hersteller'),
+          child: CupertinoTextField(
+            controller: _manufacturerController,
+            placeholder: 'z.B. Apple',
+            focusNode: _manufacturerFocus,
+            onSubmitted: (_) => _serialNumberFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Seriennummer'),
+          child: CupertinoTextField(
+            controller: _serialNumberController,
+            placeholder: 'Seriennummer Ihres Gerätes',
+            focusNode: _serialNumberFocus,
+            onSubmitted: (_) => _errorCodeFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Fehlercode'),
+          child: CupertinoTextField(
+            controller: _errorCodeController,
+            placeholder: 'Falls vorhanden',
+            focusNode: _errorCodeFocus,
+            onSubmitted: (_) => _serviceHistoryFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Servicehistorie'),
+          child: CupertinoTextField(
+            controller: _serviceHistoryController,
+            placeholder: 'Letzte Wartungen oder Reparaturen',
+            focusNode: _serviceHistoryFocus,
+            onSubmitted: (_) => _descriptionFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+            maxLines: 2,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Datum des Vorfalls'),
+          child: GestureDetector(
+            onTap: _showDatePicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              alignment: Alignment.centerRight,
+              child: Text(
+                dateText,
+                style: TextStyle(
+                  color: _selectedDate != null ? CupertinoColors.black : CupertinoColors.systemGrey,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTroubleDescription() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withAlpha(51)),
+  // Cupertino-Implementierung für Störungsbeschreibung
+  Widget _buildCupertinoTroubleDescription() {
+    return CupertinoFormSection.insetGrouped(
+      header: Text(
+        'Störungsbeschreibung',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: CupertinoColors.activeBlue,
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.defaultPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(
-              'Störungsbeschreibung',
-              'Beschreiben Sie das Problem so genau wie möglich',
-            ),
-            TextFormField(
-              controller: _descriptionController,
-              focusNode: _descriptionFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Beschreibung *',
-                alignLabelWithHint: true,
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _alternativeContactFocus.requestFocus(),
-              maxLines: 5,
-              validator: (value) => Validators.validateRequired(value, 'Beschreibung'),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _alternativeContactController,
-              focusNode: _alternativeContactFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Alternative Kontaktmöglichkeit',
-                hintText: 'z.B. alternative E-Mail oder Telefonnummer',
-              ),
-              textInputAction: TextInputAction.done,
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            OutlinedButton.icon(
-              onPressed: _showImagePickerOptions,
-              icon: const Icon(Icons.add_photo_alternate),
-              label: Text(
-                _images.isEmpty
-                    ? 'Fotos hinzufügen'
-                    : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                foregroundColor: Colors.blue,
-                side: const BorderSide(color: Colors.blue),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                minimumSize: const Size(double.infinity, 48),
-              ),
-            ),
-            if (_images.isNotEmpty) ...[
-              const SizedBox(height: AppConstants.defaultPadding),
-              SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _images.length,
-                  itemBuilder: _buildImagePreview,
+      footer: Text(
+        'Beschreiben Sie das Problem so genau wie möglich',
+        style: TextStyle(color: CupertinoColors.systemGrey),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          child: CupertinoTextField(
+            controller: _descriptionController,
+            placeholder: 'Beschreibung des Problems *',
+            focusNode: _descriptionFocus,
+            onSubmitted: (_) => _alternativeContactFocus.requestFocus(),
+            clearButtonMode: OverlayVisibilityMode.editing,
+            minLines: 3,
+            maxLines: 5,
+          ),
+        ),
+        CupertinoFormRow(
+          prefix: const Text('Alternative Kontaktmöglichkeit'),
+          child: CupertinoTextField(
+            controller: _alternativeContactController,
+            placeholder: 'z.B. alternative E-Mail oder Telefonnummer',
+            focusNode: _alternativeContactFocus,
+            clearButtonMode: OverlayVisibilityMode.editing,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              CupertinoButton.filled(
+                onPressed: _showCupertinoImagePickerOptions,
+                child: Text(
+                  _images.isEmpty
+                      ? 'Fotos hinzufügen'
+                      : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
                 ),
               ),
+              if (_isLoading)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: const CupertinoActivityIndicator(radius: 15.0),
+                ),
+              if (_images.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.defaultPadding),
+                SizedBox(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _images.length,
+                    itemBuilder: _buildCupertinoImagePreview,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
+  // Cupertino-Implementierung der Dringlichkeitsauswahl
+  Widget _buildCupertinoUrgencySection() {
+    return CupertinoFormSection.insetGrouped(
+      header: Text(
+        'Dringlichkeit',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: CupertinoColors.activeBlue,
+        ),
+      ),
+      footer: Text(
+        'Wie dringend benötigen Sie Unterstützung?',
+        style: TextStyle(color: CupertinoColors.systemGrey),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: CupertinoSegmentedControl<UrgencyLevel>(
+            children: {
+              UrgencyLevel.low: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Column(
+                  children: [
+                    Icon(CupertinoIcons.checkmark_circle, color: CupertinoColors.systemGreen),
+                    const SizedBox(height: 5),
+                    const Text('Niedrig'),
+                  ],
+                ),
+              ),
+              UrgencyLevel.medium: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Column(
+                  children: [
+                    Icon(CupertinoIcons.exclamationmark_circle, color: CupertinoColors.systemOrange),
+                    const SizedBox(height: 5),
+                    const Text('Mittel'),
+                  ],
+                ),
+              ),
+              UrgencyLevel.high: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Column(
+                  children: [
+                    Icon(CupertinoIcons.exclamationmark_triangle, color: CupertinoColors.systemRed),
+                    const SizedBox(height: 5),
+                    const Text('Hoch'),
+                  ],
+                ),
+              ),
+            },
+            onValueChanged: (value) {
+              _updateUrgencyLevel(value);
+            },
+            groupValue: _selectedUrgencyLevel,
+          ),
+        ),
+        if (_selectedUrgencyLevel != null)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              _selectedUrgencyLevel!.description,
+              style: TextStyle(color: CupertinoColors.systemGrey),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Wie zufrieden sind Sie mit dem Service bisher?',
+                  style: TextStyle(color: CupertinoColors.systemGrey),
+                ),
+              ),
+              Text('${_ratingValue.toInt()} / 5'),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: CupertinoSlider(
+            value: _ratingValue,
+            min: 0.0,
+            max: 5.0,
+            divisions: 5,
+            onChanged: (value) {
+              setState(() {
+                _ratingValue = value;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Gesamte Urgency-Sektion mit Plattform-Auswahl
   Widget _buildUrgencySection() {
+    return Platform.isIOS 
+        ? _buildCupertinoUrgencySection() 
+        : _buildMaterialUrgencySection();
+  }
+
+  // Material-Implementierung der Dringlichkeitsauswahl (original)
+  Widget _buildMaterialUrgencySection() {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -833,6 +949,76 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
+  // Bild-Vorschau für Cupertino
+  Widget _buildCupertinoImagePreview(BuildContext context, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: CupertinoContextMenu(
+        actions: [
+          CupertinoContextMenuAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showImage(index);
+            },
+            trailingIcon: CupertinoIcons.eye,
+            child: const Text('Anzeigen'),
+          ),
+          CupertinoContextMenuAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeImage(index);
+            },
+            isDestructiveAction: true,
+            trailingIcon: CupertinoIcons.delete,
+            child: const Text('Löschen'),
+          ),
+        ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(
+            _images[index],
+            height: 120,
+            width: 120,
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // CupertinoActionSheet für Bildauswahl
+  void _showCupertinoImagePickerOptions() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Foto hinzufügen'),
+        message: const Text('Wählen Sie eine Option'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _pickImage(ImageSource.camera);
+            },
+            child: const Text('Kamera'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _pickImage(ImageSource.gallery);
+            },
+            child: const Text('Galerie'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          isDestructiveAction: true,
+          child: const Text('Abbrechen'),
+        ),
+      ),
+    );
+  }
+
+  // Methode zum Anzeigen der Bildauswahloptionen (Material Design für Android)
   void _showImagePickerOptions() {
     showModalBottomSheet(
       context: context,
@@ -976,6 +1162,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
+  // Material-Bildvorschau
   Widget _buildImagePreview(BuildContext context, int index) {
     return Padding(
       padding: const EdgeInsets.only(right: 8.0),
@@ -1092,6 +1279,239 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         ],
         const SizedBox(height: AppConstants.defaultPadding),
       ],
+    );
+  }
+
+  // Material-Implementierung für persönliche Daten
+  Widget _buildPersonalData() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Persönliche Daten',
+              'Ihre Kontaktinformationen',
+            ),
+            TextFormField(
+              controller: _nameController,
+              focusNode: _nameFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Name *',
+                hintText: 'Ihr vollständiger Name',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _emailFocus.requestFocus(),
+              validator: (value) => Validators.validateRequired(value, 'Name'),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _emailController,
+              focusNode: _emailFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'E-Mail *',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
+              validator: Validators.validateEmail,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _phoneController,
+              focusNode: _phoneFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Telefon (optional)',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _addressFocus.requestFocus(),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _addressController,
+              focusNode: _addressFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Adresse (optional)',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _deviceModelFocus.requestFocus(),
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Material-Implementierung für Gerätedaten
+  Widget _buildDeviceData() {
+    // Formatiere das Datum im deutschen Format
+    final dateFormatter = DateFormat.yMd();
+    final String dateText = _selectedDate != null
+        ? dateFormatter.format(_selectedDate!)
+        : 'Bitte wählen Sie ein Datum';
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Gerätedaten',
+              'Informationen zum betroffenen Gerät',
+            ),
+            TextFormField(
+              controller: _deviceModelController,
+              focusNode: _deviceModelFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Gerätemodell',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _manufacturerFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _manufacturerController,
+              focusNode: _manufacturerFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Hersteller',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _serialNumberFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _serialNumberController,
+              focusNode: _serialNumberFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Seriennummer',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _errorCodeFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _errorCodeController,
+              focusNode: _errorCodeFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Fehlermeldung/Fehlercode',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _serviceHistoryFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _serviceHistoryController,
+              focusNode: _serviceHistoryFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Servicehistorie',
+                hintText: 'Letzte Wartungen oder Reparaturen',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _descriptionFocus.requestFocus(),
+              maxLines: 2,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            InkWell(
+              onTap: _showDatePicker,
+              child: InputDecorator(
+                decoration: AppTheme.inputDecoration.copyWith(
+                  labelText: 'Datum des Vorfalls',
+                ),
+                child: Text(dateText),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Material-Implementierung für Störungsbeschreibung
+  Widget _buildTroubleDescription() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Störungsbeschreibung',
+              'Beschreiben Sie das Problem so genau wie möglich',
+            ),
+            TextFormField(
+              controller: _descriptionController,
+              focusNode: _descriptionFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Beschreibung *',
+                alignLabelWithHint: true,
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _alternativeContactFocus.requestFocus(),
+              maxLines: 5,
+              validator: (value) => Validators.validateRequired(value, 'Beschreibung'),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _alternativeContactController,
+              focusNode: _alternativeContactFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Alternative Kontaktmöglichkeit',
+                hintText: 'z.B. alternative E-Mail oder Telefonnummer',
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            OutlinedButton.icon(
+              onPressed: _showImagePickerOptions,
+              icon: const Icon(Icons.add_photo_alternate),
+              label: Text(
+                _images.isEmpty
+                    ? 'Fotos hinzufügen'
+                    : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                foregroundColor: Colors.blue,
+                side: const BorderSide(color: Colors.blue),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: AppConstants.defaultPadding),
+              SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _images.length,
+                  itemBuilder: _buildImagePreview,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 } 
