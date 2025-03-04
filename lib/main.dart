@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'src/core/theme/app_theme.dart';
@@ -27,20 +29,33 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConstants.appTitle,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: const LoginScreen(),
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('de', 'DE'),
-      ],
-      locale: const Locale('de', 'DE'),
-    );
+    if (Platform.isIOS) {
+      return CupertinoApp(
+        title: AppConstants.appTitle,
+        debugShowCheckedModeBanner: false,
+        theme: const CupertinoThemeData(),
+        home: const LoginScreen(),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('de', 'DE')],
+      );
+    } else {
+      return MaterialApp(
+        title: AppConstants.appTitle,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme.copyWith(useMaterial3: true),
+        home: const LoginScreen(),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('de', 'DE')],
+        locale: const Locale('de', 'DE'),
+      );
+    }
   }
 } 
