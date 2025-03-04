@@ -800,7 +800,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
           child: CupertinoSegmentedControl<UrgencyLevel>(
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
             children: {
               UrgencyLevel.low: _buildUrgencySegment(
                 'Niedrig',
@@ -900,16 +900,16 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Helfer-Methode zum Erstellen eines Segments in der Dringlichkeitsauswahl
   Widget _buildUrgencySegment(String text, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 4),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
           Text(
             text,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1105,45 +1105,54 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Bild-Vorschau für Cupertino
   Widget _buildCupertinoImagePreview(BuildContext context, int index) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: CupertinoContextMenu(
-        actions: [
-          CupertinoContextMenuAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _showCupertinoImage(index);
-            },
-            trailingIcon: CupertinoIcons.eye,
-            child: const Text('Anzeigen'),
+      padding: const EdgeInsets.only(right: 12.0),
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: () => _showCupertinoImage(index),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 100,
+                width: 100,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: CupertinoColors.systemGrey4,
+                    width: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Image.file(
+                  _images[index],
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
           ),
-          CupertinoContextMenuAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _removeImage(index);
-            },
-            isDestructiveAction: true,
-            trailingIcon: CupertinoIcons.delete,
-            child: const Text('Löschen'),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _removeImage(index);
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                padding: const EdgeInsets.all(4),
+                child: const Icon(
+                  CupertinoIcons.delete,
+                  color: CupertinoColors.destructiveRed,
+                  size: 18,
+                ),
+              ),
+            ),
           ),
         ],
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            height: 90,
-            width: 90,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: CupertinoColors.systemGrey4,
-                width: 0.5,
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Image.file(
-              _images[index],
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
       ),
     );
   }
