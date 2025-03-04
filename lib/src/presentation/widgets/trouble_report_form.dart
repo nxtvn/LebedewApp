@@ -243,7 +243,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildTypeSelection(),
+            _buildRequestTypeSection(),
             const SizedBox(height: AppConstants.defaultPadding),
             _buildPersonalData(),
             const SizedBox(height: AppConstants.defaultPadding),
@@ -251,14 +251,14 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             const SizedBox(height: AppConstants.defaultPadding),
             _buildTroubleDescription(),
             const SizedBox(height: AppConstants.defaultPadding),
-            _buildUrgencySelection(),
+            _buildUrgencySection(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTypeSelection() {
+  Widget _buildRequestTypeSection() {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -277,19 +277,72 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               'Wählen Sie die passende Kategorie',
             ),
           ),
-          ...RequestType.values.map((type) => Theme(
-            data: Theme.of(context).copyWith(
-              unselectedWidgetColor: Colors.grey[400],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Wrap(
+              spacing: 12.0,
+              runSpacing: 12.0,
+              children: RequestType.values.map((type) {
+                final isSelected = _selectedType == type;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3),
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                      ? [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))]
+                      : [],
+                  ),
+                  child: InkWell(
+                    onTap: () => _updateRequestType(type),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? Colors.blue : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected ? Colors.blue : Colors.grey,
+                                width: 2,
+                              ),
+                            ),
+                            child: isSelected
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              type.label,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isSelected ? Colors.blue : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-            child: RadioListTile<RequestType>(
-              title: Text(type.label),
-              value: type,
-              groupValue: _selectedType,
-              onChanged: _updateRequestType,
-              activeColor: Colors.blue,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
-          )).toList(),
+          ),
         ],
       ),
     );
@@ -525,7 +578,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  Widget _buildUrgencySelection() {
+  Widget _buildUrgencySection() {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -544,20 +597,97 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               'Wie dringend benötigen Sie Unterstützung?',
             ),
           ),
-          ...UrgencyLevel.values.map((level) => Theme(
-            data: Theme.of(context).copyWith(
-              unselectedWidgetColor: Colors.grey[400],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              children: UrgencyLevel.values.map((level) {
+                final isSelected = _selectedUrgencyLevel == level;
+                // Farbkodierung basierend auf Dringlichkeitsstufe
+                Color urgencyColor;
+                switch (level) {
+                  case UrgencyLevel.high:
+                    urgencyColor = Colors.redAccent;
+                    break;
+                  case UrgencyLevel.medium:
+                    urgencyColor = Colors.orangeAccent;
+                    break;
+                  case UrgencyLevel.low:
+                    urgencyColor = Colors.greenAccent;
+                    break;
+                }
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      color: isSelected ? urgencyColor.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? urgencyColor : Colors.grey.withOpacity(0.3),
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: isSelected
+                        ? [BoxShadow(color: urgencyColor.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))]
+                        : [],
+                    ),
+                    child: InkWell(
+                      onTap: () => _updateUrgencyLevel(level),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? urgencyColor : Colors.transparent,
+                                border: Border.all(
+                                  color: isSelected ? urgencyColor : Colors.grey,
+                                  width: 2,
+                                ),
+                              ),
+                              child: isSelected
+                                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                : null,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    level.label,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? urgencyColor : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    level.description,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-            child: RadioListTile<UrgencyLevel>(
-              title: Text(level.label),
-              subtitle: Text(level.description),
-              value: level,
-              groupValue: _selectedUrgencyLevel,
-              onChanged: _updateUrgencyLevel,
-              activeColor: Colors.blue,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
-          )).toList(),
+          ),
         ],
       ),
     );
