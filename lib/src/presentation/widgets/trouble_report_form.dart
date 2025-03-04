@@ -1,0 +1,771 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:intl/intl.dart';
+import '../../domain/enums/request_type.dart';
+import '../../domain/enums/urgency_level.dart';
+import '../viewmodels/trouble_report_viewmodel.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/utils/validators.dart';
+
+class TroubleReportForm extends StatefulWidget {
+  final GlobalKey<FormState> formKey;
+  
+  const TroubleReportForm({
+    required this.formKey,
+    super.key,
+  });
+
+  @override
+  State<TroubleReportForm> createState() => TroubleReportFormState();
+}
+
+class TroubleReportFormState extends State<TroubleReportForm> {
+  // Controller als final Felder deklarieren
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _deviceModelController = TextEditingController();
+  final TextEditingController _manufacturerController = TextEditingController();
+  final TextEditingController _serialNumberController = TextEditingController();
+  final TextEditingController _errorCodeController = TextEditingController();
+  final TextEditingController _serviceHistoryController = TextEditingController();
+  final TextEditingController _previousIssuesController = TextEditingController();
+  final TextEditingController _alternativeContactController = TextEditingController();
+  
+  // FocusNodes für jedes Textfeld
+  final FocusNode _descriptionFocus = FocusNode();
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _addressFocus = FocusNode();
+  final FocusNode _deviceModelFocus = FocusNode();
+  final FocusNode _manufacturerFocus = FocusNode();
+  final FocusNode _serialNumberFocus = FocusNode();
+  final FocusNode _errorCodeFocus = FocusNode();
+  final FocusNode _serviceHistoryFocus = FocusNode();
+  final FocusNode _previousIssuesFocus = FocusNode();
+  final FocusNode _alternativeContactFocus = FocusNode();
+  
+  // Lokale Zustandsvariablen für Auswahlwerte
+  RequestType? _selectedType;
+  UrgencyLevel? _selectedUrgencyLevel;
+  DateTime? _selectedDate;
+  
+  final List<File> _images = [];
+  final ScrollController _scrollController = ScrollController();
+
+  // Referenz auf das ViewModel für einfacheren Zugriff
+  late final TroubleReportViewModel _viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // ViewModel-Referenz initialisieren
+    _viewModel = context.read<TroubleReportViewModel>();
+    
+    // Initialen Zustand aus dem ViewModel laden
+    _loadInitialState();
+    
+    // Listener für Controller-Änderungen
+    _setupControllerListeners();
+  }
+
+  void _loadInitialState() {
+    // Lokale Zustandsvariablen mit ViewModel-Werten initialisieren
+    setState(() {
+      _selectedType = _viewModel.type;
+      _selectedUrgencyLevel = _viewModel.urgencyLevel;
+      _selectedDate = _viewModel.occurrenceDate;
+      _images.clear();
+      _images.addAll(_viewModel.images);
+      
+      // Controller mit initialen Werten aus dem ViewModel befüllen
+      _descriptionController.text = _viewModel.description ?? '';
+      _nameController.text = _viewModel.name ?? '';
+      _emailController.text = _viewModel.email ?? '';
+      _phoneController.text = _viewModel.phone ?? '';
+      _addressController.text = _viewModel.address ?? '';
+      _deviceModelController.text = _viewModel.deviceModel ?? '';
+      _manufacturerController.text = _viewModel.manufacturer ?? '';
+      _serialNumberController.text = _viewModel.serialNumber ?? '';
+      _errorCodeController.text = _viewModel.errorCode ?? '';
+      _serviceHistoryController.text = _viewModel.serviceHistory ?? '';
+      _alternativeContactController.text = _viewModel.alternativeContact ?? '';
+    });
+  }
+
+  void _setupControllerListeners() {
+    // Listener für TextEditingController
+    _descriptionController.addListener(() => _viewModel.setDescription(_descriptionController.text));
+    _nameController.addListener(() => _viewModel.setName(_nameController.text));
+    _emailController.addListener(() => _viewModel.setEmail(_emailController.text));
+    _phoneController.addListener(() => _viewModel.setPhone(_phoneController.text));
+    _addressController.addListener(() => _viewModel.setAddress(_addressController.text));
+    _deviceModelController.addListener(() => _viewModel.setDeviceModel(_deviceModelController.text));
+    _manufacturerController.addListener(() => _viewModel.setManufacturer(_manufacturerController.text));
+    _serialNumberController.addListener(() => _viewModel.setSerialNumber(_serialNumberController.text));
+    _errorCodeController.addListener(() => _viewModel.setErrorCode(_errorCodeController.text));
+    _serviceHistoryController.addListener(() => _viewModel.setServiceHistory(_serviceHistoryController.text));
+    _previousIssuesController.addListener(() => _viewModel.setPreviousIssues(_previousIssuesController.text));
+    _alternativeContactController.addListener(() => _viewModel.setAlternativeContact(_alternativeContactController.text));
+  }
+
+  void reset() {
+    setState(() {
+      _selectedType = null;
+      _selectedUrgencyLevel = null;
+      _selectedDate = null;
+      _images.clear();
+      
+      _descriptionController.clear();
+      _nameController.clear();
+      _emailController.clear();
+      _phoneController.clear();
+      _addressController.clear();
+      _deviceModelController.clear();
+      _manufacturerController.clear();
+      _serialNumberController.clear();
+      _errorCodeController.clear();
+      _serviceHistoryController.clear();
+      _alternativeContactController.clear();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Controller und Listener aufräumen
+    _descriptionController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _deviceModelController.dispose();
+    _manufacturerController.dispose();
+    _serialNumberController.dispose();
+    _errorCodeController.dispose();
+    _serviceHistoryController.dispose();
+    _previousIssuesController.dispose();
+    _alternativeContactController.dispose();
+    
+    // FocusNodes aufräumen
+    _descriptionFocus.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _phoneFocus.dispose();
+    _addressFocus.dispose();
+    _deviceModelFocus.dispose();
+    _manufacturerFocus.dispose();
+    _serialNumberFocus.dispose();
+    _errorCodeFocus.dispose();
+    _serviceHistoryFocus.dispose();
+    _previousIssuesFocus.dispose();
+    _alternativeContactFocus.dispose();
+    
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // Methoden für die Aktualisierung der Auswahlwerte
+  void _updateRequestType(RequestType? value) {
+    if (value != null && value != _selectedType) {
+      setState(() => _selectedType = value);
+      _viewModel.setType(value);
+    }
+  }
+
+  void _updateUrgencyLevel(UrgencyLevel? value) {
+    if (value != null && value != _selectedUrgencyLevel) {
+      setState(() => _selectedUrgencyLevel = value);
+      _viewModel.setUrgencyLevel(value);
+    }
+  }
+
+  void _updateDate(DateTime? value) {
+    if (value != null && value != _selectedDate) {
+      setState(() => _selectedDate = value);
+      _viewModel.setOccurrenceDate(value);
+    }
+  }
+
+  void _removeImage(int index) {
+    if (index >= 0 && index < _images.length) {
+      setState(() => _images.removeAt(index));
+      _viewModel.removeImagePath(index);
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    
+    if (source == ImageSource.gallery) {
+      final List<XFile> pickedFiles = await picker.pickMultiImage();
+      if (pickedFiles.isNotEmpty && mounted) {
+        for (final file in pickedFiles) {
+          final imageFile = File(file.path);
+          setState(() {
+            _images.add(imageFile);
+          });
+          final path = await _viewModel.repository.saveImage(imageFile);
+          _viewModel.addImagePath(path);
+        }
+      }
+    } else {
+      final XFile? pickedFile = await picker.pickImage(source: source);
+      if (pickedFile != null && mounted) {
+        final imageFile = File(pickedFile.path);
+        setState(() {
+          _images.add(imageFile);
+        });
+        final path = await _viewModel.repository.saveImage(imageFile);
+        _viewModel.addImagePath(path);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: widget.formKey,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.defaultPadding,
+          AppConstants.defaultPadding,
+          AppConstants.defaultPadding,
+          AppConstants.defaultPadding + 80,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildTypeSelection(),
+            const SizedBox(height: AppConstants.defaultPadding),
+            _buildPersonalData(),
+            const SizedBox(height: AppConstants.defaultPadding),
+            _buildDeviceData(),
+            const SizedBox(height: AppConstants.defaultPadding),
+            _buildTroubleDescription(),
+            const SizedBox(height: AppConstants.defaultPadding),
+            _buildUrgencySelection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeSelection() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.withAlpha(51),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.defaultPadding),
+            child: _buildSectionHeader(
+              'Art des Anliegens',
+              'Wählen Sie die passende Kategorie',
+            ),
+          ),
+          ...RequestType.values.map((type) => Theme(
+            data: Theme.of(context).copyWith(
+              unselectedWidgetColor: Colors.grey[400],
+            ),
+            child: RadioListTile<RequestType>(
+              title: Text(type.label),
+              value: type,
+              groupValue: _selectedType,
+              onChanged: _updateRequestType,
+              activeColor: Colors.blue,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonalData() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Persönliche Daten',
+              'Ihre Kontaktinformationen',
+            ),
+            TextFormField(
+              controller: _nameController,
+              focusNode: _nameFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Name *',
+                hintText: 'Ihr vollständiger Name',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _emailFocus.requestFocus(),
+              validator: (value) => Validators.validateRequired(value, 'Name'),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _emailController,
+              focusNode: _emailFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'E-Mail *',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
+              validator: Validators.validateEmail,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _phoneController,
+              focusNode: _phoneFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Telefon (optional)',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _addressFocus.requestFocus(),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _addressController,
+              focusNode: _addressFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Adresse (optional)',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _deviceModelFocus.requestFocus(),
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeviceData() {
+    // Formatiere das Datum im deutschen Format
+    final dateFormatter = DateFormat.yMd();
+    final String dateText = _selectedDate != null
+        ? dateFormatter.format(_selectedDate!)
+        : 'Bitte wählen Sie ein Datum';
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Gerätedaten',
+              'Informationen zum betroffenen Gerät',
+            ),
+            TextFormField(
+              controller: _deviceModelController,
+              focusNode: _deviceModelFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Gerätemodell',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _manufacturerFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _manufacturerController,
+              focusNode: _manufacturerFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Hersteller',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _serialNumberFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _serialNumberController,
+              focusNode: _serialNumberFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Seriennummer',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _errorCodeFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _errorCodeController,
+              focusNode: _errorCodeFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Fehlermeldung/Fehlercode',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _serviceHistoryFocus.requestFocus(),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _serviceHistoryController,
+              focusNode: _serviceHistoryFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Servicehistorie',
+                hintText: 'Letzte Wartungen oder Reparaturen',
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _descriptionFocus.requestFocus(),
+              maxLines: 2,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            InkWell(
+              onTap: _showDatePicker,
+              child: InputDecorator(
+                decoration: AppTheme.inputDecoration.copyWith(
+                  labelText: 'Datum des Vorfalls',
+                ),
+                child: Text(dateText),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTroubleDescription() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Störungsbeschreibung',
+              'Beschreiben Sie das Problem so genau wie möglich',
+            ),
+            TextFormField(
+              controller: _descriptionController,
+              focusNode: _descriptionFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Beschreibung *',
+                alignLabelWithHint: true,
+              ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _alternativeContactFocus.requestFocus(),
+              maxLines: 5,
+              validator: (value) => Validators.validateRequired(value, 'Beschreibung'),
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            TextFormField(
+              controller: _alternativeContactController,
+              focusNode: _alternativeContactFocus,
+              decoration: AppTheme.inputDecoration.copyWith(
+                labelText: 'Alternative Kontaktmöglichkeit',
+                hintText: 'z.B. alternative E-Mail oder Telefonnummer',
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+            const SizedBox(height: AppConstants.defaultPadding),
+            OutlinedButton.icon(
+              onPressed: _showImagePickerOptions,
+              icon: const Icon(Icons.add_photo_alternate),
+              label: Text(
+                _images.isEmpty
+                    ? 'Fotos hinzufügen'
+                    : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                foregroundColor: Colors.blue,
+                side: const BorderSide(color: Colors.blue),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: AppConstants.defaultPadding),
+              SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _images.length,
+                  itemBuilder: _buildImagePreview,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUrgencySelection() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.withAlpha(51),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.defaultPadding),
+            child: _buildSectionHeader(
+              'Dringlichkeit',
+              'Wie dringend benötigen Sie Unterstützung?',
+            ),
+          ),
+          ...UrgencyLevel.values.map((level) => Theme(
+            data: Theme.of(context).copyWith(
+              unselectedWidgetColor: Colors.grey[400],
+            ),
+            child: RadioListTile<UrgencyLevel>(
+              title: Text(level.label),
+              subtitle: Text(level.description),
+              value: level,
+              groupValue: _selectedUrgencyLevel,
+              onChanged: _updateUrgencyLevel,
+              activeColor: Colors.blue,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Foto hinzufügen',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withAlpha(26),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.camera_alt, color: Colors.blue),
+              ),
+              title: const Text('Kamera'),
+              subtitle: const Text('Foto mit der Kamera aufnehmen'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withAlpha(26),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.photo_library, color: Colors.blue),
+              ),
+              title: const Text('Galerie'),
+              subtitle: const Text('Ein oder mehrere Fotos aus der Galerie auswählen'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDatePicker() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (picked != null && mounted) {
+      _updateDate(picked);
+    }
+  }
+
+  Widget _buildImagePreview(BuildContext context, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: Stack(
+        children: [
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _showImage(index),
+              child: Image.file(
+                _images[index],
+                height: 120,
+                width: 120,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _removeImage(index),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showImage(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Stack(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InteractiveViewer(
+                  child: Image.file(_images[index]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _removeImage(index),
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        label: const Text('Löschen', style: TextStyle(color: Colors.red)),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        label: const Text('Schließen'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withAlpha(128),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, [String? subtitle]) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppConstants.defaultPadding),
+      ],
+    );
+  }
+} 

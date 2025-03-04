@@ -1,0 +1,8 @@
+defaultConfig {
+    applicationId "agency.nextvision.lebedew_app"
+    minSdkVersion flutter.minSdkVersion
+    targetSdkVersion flutter.targetSdkVersion
+    versionCode flutterVersionCode.toInteger()
+    versionName flutterVersionName
+    // Rest bleibt unverändert
+} 
