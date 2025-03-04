@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform, File;
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
 import '../../domain/enums/request_type.dart';
 import '../../domain/enums/urgency_level.dart';
@@ -259,6 +260,72 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   }
 
   Widget _buildRequestTypeSection() {
+    // Plattformspezifische Implementierung
+    if (Platform.isIOS) {
+      return _buildCupertinoRequestTypeSection();
+    } else {
+      return _buildMaterialRequestTypeSection();
+    }
+  }
+
+  // Cupertino-Implementierung des Anliegens-Auswahlbereichs für iOS
+  Widget _buildCupertinoRequestTypeSection() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.withAlpha(51),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.defaultPadding),
+            child: _buildSectionHeader(
+              'Art des Anliegens',
+              'Wählen Sie die passende Kategorie',
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: GestureDetector(
+              onTap: _showCupertinoRequestTypePicker,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.grey.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedType?.label ?? 'Bitte wählen',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _selectedType != null ? Colors.black87 : Colors.grey,
+                      ),
+                    ),
+                    const Icon(CupertinoIcons.chevron_down, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16.0),
+        ],
+      ),
+    );
+  }
+
+  // Material-Implementierung des Anliegens-Auswahlbereichs (original)
+  Widget _buildMaterialRequestTypeSection() {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -344,6 +411,71 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Methode zum Anzeigen des Cupertino Pickers für die Art des Anliegens
+  void _showCupertinoRequestTypePicker() {
+    int selectedIndex = _selectedType != null 
+        ? RequestType.values.indexOf(_selectedType!)
+        : 0;
+        
+    showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 250,
+        padding: const EdgeInsets.only(top: 6.0),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: const Text('Abbrechen'),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    child: const Text('Fertig'),
+                    onPressed: () {
+                      _updateRequestType(RequestType.values[selectedIndex]);
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoPicker(
+                  magnification: 1.22,
+                  squeeze: 1.2,
+                  useMagnifier: true,
+                  itemExtent: 32,
+                  scrollController: FixedExtentScrollController(
+                    initialItem: selectedIndex,
+                  ),
+                  onSelectedItemChanged: (int selectedItem) {
+                    selectedIndex = selectedItem;
+                  },
+                  children: 
+                    RequestType.values.map(
+                      (type) => Center(
+                        child: Text(
+                          type.label,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -750,34 +882,90 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   }
 
   Future<void> _showDatePicker() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Theme.of(context).primaryColor,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).primaryColor,
+    if (Platform.isIOS) {
+      _showCupertinoDatePicker();
+    } else {
+      // Material Date Picker für Android-Geräte (bisherige Implementierung)
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime.now(),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Theme.of(context).primaryColor,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black,
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).primaryColor,
+                ),
               ),
             ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    
-    if (picked != null && mounted) {
-      _updateDate(picked);
+            child: child!,
+          );
+        },
+      );
+      
+      if (picked != null && mounted) {
+        _updateDate(picked);
+      }
     }
+  }
+
+  // Methode zum Anzeigen des CupertinoDatePickers
+  void _showCupertinoDatePicker() {
+    DateTime initialDate = _selectedDate ?? DateTime.now();
+    
+    showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 250,
+        padding: const EdgeInsets.only(top: 6.0),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: const Text('Abbrechen'),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    child: const Text('Fertig'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  initialDateTime: initialDate,
+                  mode: CupertinoDatePickerMode.date,
+                  maximumDate: DateTime.now(),
+                  minimumDate: DateTime(2000),
+                  use24hFormat: true,
+                  onDateTimeChanged: (DateTime newDateTime) {
+                    _updateDate(newDateTime);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildImagePreview(BuildContext context, int index) {
