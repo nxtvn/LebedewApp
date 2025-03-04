@@ -245,6 +245,12 @@ class TroubleReportFormState extends State<TroubleReportForm> {
 
   @override
   Widget build(BuildContext context) {
+    // Für iOS ein spezialisiertes Layout verwenden
+    if (Platform.isIOS) {
+      return _buildCupertinoForm(context);
+    }
+    
+    // Ansonsten das Material Design-Layout beibehalten
     return Form(
       key: widget.formKey,
       child: SingleChildScrollView(
@@ -259,49 +265,81 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildRequestTypeSection(),
+            _buildMaterialRequestTypeSection(),
             const SizedBox(height: AppConstants.defaultPadding / 2),
-            Platform.isIOS ? _buildCupertinoPersonalData() : _buildPersonalData(),
+            _buildPersonalData(),
             const SizedBox(height: AppConstants.defaultPadding / 2),
-            Platform.isIOS ? _buildCupertinoDeviceData() : _buildDeviceData(),
+            _buildDeviceData(),
             const SizedBox(height: AppConstants.defaultPadding / 2),
-            Platform.isIOS ? _buildCupertinoTroubleDescription() : _buildTroubleDescription(),
+            _buildTroubleDescription(),
             const SizedBox(height: AppConstants.defaultPadding / 2),
-            _buildUrgencySection(),
+            _buildMaterialUrgencySection(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRequestTypeSection() {
-    // Plattformspezifische Implementierung
-    if (Platform.isIOS) {
-      return _buildCupertinoRequestTypeSection();
-    } else {
-      return _buildMaterialRequestTypeSection();
-    }
+  // iOS-spezifisches Formular-Layout
+  Widget _buildCupertinoForm(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      child: SafeArea(
+        child: Form(
+          key: widget.formKey,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 80),
+            child: Column(
+              children: [
+                _buildCupertinoRequestTypeSection(),
+                _buildCupertinoPersonalData(),
+                _buildCupertinoDeviceData(),
+                _buildCupertinoTroubleDescription(),
+                _buildCupertinoUrgencySection(),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // Cupertino-Implementierung des Anliegens-Auswahlbereichs für iOS
   Widget _buildCupertinoRequestTypeSection() {
     return CupertinoFormSection.insetGrouped(
-      margin: EdgeInsets.zero,
-      header: Text(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      header: const Text(
         'Art des Anliegens',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: CupertinoColors.activeBlue,
         ),
       ),
-      footer: Text(
-        'Wählen Sie die passende Kategorie',
-        style: TextStyle(color: CupertinoColors.systemGrey),
+      footer: const Text(
+        'Wählen Sie die passende Kategorie aus',
+        style: TextStyle(
+          fontSize: 13,
+          color: CupertinoColors.systemGrey,
+        ),
       ),
       children: [
         CupertinoFormRow(
-          prefix: const Text('Kategorie'),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          prefix: const Text(
+            'Kategorie',
+            style: TextStyle(
+              fontSize: 16,
+              color: CupertinoColors.label,
+            ),
+          ),
           child: GestureDetector(
             onTap: _showCupertinoRequestTypePicker,
             child: Row(
@@ -310,11 +348,18 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 Text(
                   _selectedType?.label ?? 'Bitte wählen',
                   style: TextStyle(
-                    color: _selectedType != null ? CupertinoColors.black : CupertinoColors.systemGrey,
+                    fontSize: 16,
+                    color: _selectedType != null 
+                        ? CupertinoColors.label 
+                        : CupertinoColors.systemGrey,
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(CupertinoIcons.chevron_down, size: 16),
+                const Icon(
+                  CupertinoIcons.chevron_right, 
+                  size: 16, 
+                  color: CupertinoColors.systemGrey,
+                ),
               ],
             ),
           ),
@@ -323,249 +368,107 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  // Material-Implementierung des Anliegens-Auswahlbereichs (original)
-  Widget _buildMaterialRequestTypeSection() {
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.withAlpha(51),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: _buildSectionHeader(
-              'Art des Anliegens',
-              'Wählen Sie die passende Kategorie',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-            child: Wrap(
-              spacing: 12.0,
-              runSpacing: 12.0,
-              children: RequestType.values.map((type) {
-                final isSelected = _selectedType == type;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3),
-                      width: isSelected ? 2 : 1,
-                    ),
-                    boxShadow: isSelected
-                      ? [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))]
-                      : [],
-                  ),
-                  child: InkWell(
-                    onTap: () => _updateRequestType(type),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected ? Colors.blue : Colors.transparent,
-                              border: Border.all(
-                                color: isSelected ? Colors.blue : Colors.grey,
-                                width: 2,
-                              ),
-                            ),
-                            child: isSelected
-                              ? const Icon(Icons.check, size: 16, color: Colors.white)
-                              : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              type.label,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                color: isSelected ? Colors.blue : Colors.black87,
-                              ),
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Methode zum Anzeigen des Cupertino Pickers für die Art des Anliegens
-  void _showCupertinoRequestTypePicker() {
-    int selectedIndex = _selectedType != null 
-        ? RequestType.values.indexOf(_selectedType!)
-        : 0;
-        
-    showCupertinoModalPopup(
-      context: context,
-      builder: (BuildContext context) => SizedBox(
-        height: 250,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(12),
-            topRight: Radius.circular(12),
-          ),
-          child: Container(
-            color: CupertinoColors.systemBackground.resolveFrom(context),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                children: [
-                  Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.systemBackground.resolveFrom(context),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: CupertinoColors.systemGrey5.resolveFrom(context),
-                          width: 0.5,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          child: const Text('Abbrechen'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          child: const Text('Fertig'),
-                          onPressed: () {
-                            final selectedType = RequestType.values[selectedIndex];
-                            Navigator.pop(context);
-                            Future.delayed(Duration.zero, () {
-                              if (mounted) {
-                                _updateRequestType(selectedType);
-                              }
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: CupertinoPicker(
-                      magnification: 1.1,
-                      squeeze: 1.1,
-                      useMagnifier: true,
-                      itemExtent: 32,
-                      scrollController: FixedExtentScrollController(
-                        initialItem: selectedIndex,
-                      ),
-                      onSelectedItemChanged: (int selectedItem) {
-                        selectedIndex = selectedItem;
-                      },
-                      children: 
-                        RequestType.values.map(
-                          (type) => Center(
-                            child: Text(
-                              type.label,
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // Cupertino-Implementierung für persönliche Daten
   Widget _buildCupertinoPersonalData() {
     return CupertinoFormSection.insetGrouped(
-      margin: EdgeInsets.zero,
-      header: Text(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      header: const Text(
         'Persönliche Daten',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: CupertinoColors.activeBlue,
         ),
       ),
-      footer: Text(
+      footer: const Text(
         'Ihre Kontaktinformationen',
-        style: TextStyle(color: CupertinoColors.systemGrey),
+        style: TextStyle(
+          fontSize: 13,
+          color: CupertinoColors.systemGrey,
+        ),
       ),
       children: [
-        CupertinoFormRow(
-          prefix: const Text('Name *'),
-          child: CupertinoTextField.borderless(
-            controller: _nameController,
-            placeholder: 'Ihr vollständiger Name',
-            onSubmitted: (_) => _emailFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'Name *',
+          placeholder: 'Ihr vollständiger Name',
+          controller: _nameController,
+          keyboardType: TextInputType.name,
+          focusNode: _nameFocus,
+          nextFocus: _emailFocus,
+          validator: (value) => Validators.validateRequired(value, 'Name'),
         ),
-        CupertinoFormRow(
-          prefix: const Text('E-Mail *'),
-          child: CupertinoTextField.borderless(
-            controller: _emailController,
-            placeholder: 'Ihre E-Mail-Adresse',
-            keyboardType: TextInputType.emailAddress,
-            focusNode: _emailFocus,
-            onSubmitted: (_) => _phoneFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'E-Mail *',
+          placeholder: 'Ihre E-Mail-Adresse',
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          focusNode: _emailFocus,
+          nextFocus: _phoneFocus,
+          validator: Validators.validateEmail,
         ),
-        CupertinoFormRow(
-          prefix: const Text('Telefon'),
-          child: CupertinoTextField.borderless(
-            controller: _phoneController,
-            placeholder: 'Ihre Telefonnummer',
-            keyboardType: TextInputType.phone,
-            focusNode: _phoneFocus,
-            onSubmitted: (_) => _addressFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'Telefon',
+          placeholder: 'Ihre Telefonnummer',
+          controller: _phoneController,
+          keyboardType: TextInputType.phone,
+          focusNode: _phoneFocus,
+          nextFocus: _addressFocus,
         ),
-        CupertinoFormRow(
-          prefix: const Text('Adresse'),
-          child: CupertinoTextField.borderless(
-            controller: _addressController,
-            placeholder: 'Ihre Adresse',
-            focusNode: _addressFocus,
-            onSubmitted: (_) => _deviceModelFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'Adresse',
+          placeholder: 'Ihre Adresse',
+          controller: _addressController,
+          keyboardType: TextInputType.streetAddress,
+          focusNode: _addressFocus,
+          nextFocus: _deviceModelFocus,
         ),
       ],
+    );
+  }
+
+  // Helfer-Methode für Cupertino-Formularzeilen
+  Widget _buildCupertinoFormRow({
+    required String label,
+    required String placeholder,
+    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
+    FocusNode? focusNode,
+    FocusNode? nextFocus,
+    FormFieldValidator<String>? validator,
+    bool multiline = false,
+  }) {
+    return CupertinoFormRow(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      prefix: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          color: CupertinoColors.label,
+        ),
+      ),
+      child: CupertinoTextField.borderless(
+        controller: controller,
+        placeholder: placeholder,
+        keyboardType: keyboardType,
+        focusNode: focusNode,
+        onSubmitted: nextFocus != null ? (_) => nextFocus.requestFocus() : null,
+        clearButtonMode: OverlayVisibilityMode.editing,
+        padding: const EdgeInsets.only(left: 8),
+        textAlign: TextAlign.end,
+        maxLines: multiline ? 3 : 1,
+        style: const TextStyle(
+          fontSize: 16,
+          color: CupertinoColors.label,
+        ),
+        placeholderStyle: const TextStyle(
+          fontSize: 16,
+          color: CupertinoColors.systemGrey,
+        ),
+      ),
     );
   }
 
@@ -575,91 +478,102 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     final dateFormatter = DateFormat.yMd();
     final String dateText = _selectedDate != null
         ? dateFormatter.format(_selectedDate!)
-        : 'Bitte wählen Sie ein Datum';
+        : 'Bitte wählen';
 
     return CupertinoFormSection.insetGrouped(
-      margin: EdgeInsets.zero,
-      header: Text(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      header: const Text(
         'Gerätedaten',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: CupertinoColors.activeBlue,
         ),
       ),
-      footer: Text(
+      footer: const Text(
         'Informationen zum betroffenen Gerät',
-        style: TextStyle(color: CupertinoColors.systemGrey),
+        style: TextStyle(
+          fontSize: 13,
+          color: CupertinoColors.systemGrey,
+        ),
       ),
       children: [
-        CupertinoFormRow(
-          prefix: const Text('Gerätemodell'),
-          child: CupertinoTextField.borderless(
-            controller: _deviceModelController,
-            placeholder: 'z.B. iPhone 13',
-            focusNode: _deviceModelFocus,
-            onSubmitted: (_) => _manufacturerFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'Gerätemodell',
+          placeholder: 'z.B. iPhone 13',
+          controller: _deviceModelController,
+          keyboardType: TextInputType.text,
+          focusNode: _deviceModelFocus,
+          nextFocus: _manufacturerFocus,
+        ),
+        _buildCupertinoFormRow(
+          label: 'Hersteller',
+          placeholder: 'z.B. Apple',
+          controller: _manufacturerController,
+          keyboardType: TextInputType.text,
+          focusNode: _manufacturerFocus,
+          nextFocus: _serialNumberFocus,
+        ),
+        _buildCupertinoFormRow(
+          label: 'Seriennummer',
+          placeholder: 'Seriennummer',
+          controller: _serialNumberController,
+          keyboardType: TextInputType.text,
+          focusNode: _serialNumberFocus,
+          nextFocus: _errorCodeFocus,
+        ),
+        _buildCupertinoFormRow(
+          label: 'Fehlercode',
+          placeholder: 'Falls vorhanden',
+          controller: _errorCodeController,
+          keyboardType: TextInputType.text,
+          focusNode: _errorCodeFocus,
+          nextFocus: _serviceHistoryFocus,
+        ),
+        _buildCupertinoFormRow(
+          label: 'Servicehistorie',
+          placeholder: 'Letzte Wartungen',
+          controller: _serviceHistoryController,
+          keyboardType: TextInputType.text,
+          focusNode: _serviceHistoryFocus,
+          nextFocus: _descriptionFocus,
+          multiline: true,
         ),
         CupertinoFormRow(
-          prefix: const Text('Hersteller'),
-          child: CupertinoTextField.borderless(
-            controller: _manufacturerController,
-            placeholder: 'z.B. Apple',
-            focusNode: _manufacturerFocus,
-            onSubmitted: (_) => _serialNumberFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          prefix: const Text(
+            'Datum des Vorfalls',
+            style: TextStyle(
+              fontSize: 16,
+              color: CupertinoColors.label,
+            ),
           ),
-        ),
-        CupertinoFormRow(
-          prefix: const Text('Seriennummer'),
-          child: CupertinoTextField.borderless(
-            controller: _serialNumberController,
-            placeholder: 'Seriennummer Ihres Gerätes',
-            focusNode: _serialNumberFocus,
-            onSubmitted: (_) => _errorCodeFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
-        ),
-        CupertinoFormRow(
-          prefix: const Text('Fehlercode'),
-          child: CupertinoTextField.borderless(
-            controller: _errorCodeController,
-            placeholder: 'Falls vorhanden',
-            focusNode: _errorCodeFocus,
-            onSubmitted: (_) => _serviceHistoryFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
-        ),
-        CupertinoFormRow(
-          prefix: const Text('Servicehistorie'),
-          child: CupertinoTextField.borderless(
-            controller: _serviceHistoryController,
-            placeholder: 'Letzte Wartungen oder Reparaturen',
-            focusNode: _serviceHistoryFocus,
-            onSubmitted: (_) => _descriptionFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
-        ),
-        CupertinoFormRow(
-          prefix: const Text('Datum des Vorfalls'),
           child: GestureDetector(
-            onTap: _showDatePicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              alignment: Alignment.centerRight,
-              child: Text(
-                dateText,
-                style: TextStyle(
-                  color: _selectedDate != null ? CupertinoColors.black : CupertinoColors.systemGrey,
+            onTap: _showCupertinoDatePicker,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  dateText,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: _selectedDate != null 
+                        ? CupertinoColors.label 
+                        : CupertinoColors.systemGrey,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                const Icon(
+                  CupertinoIcons.calendar, 
+                  size: 20, 
+                  color: CupertinoColors.systemGrey,
+                ),
+              ],
             ),
           ),
         ),
@@ -670,68 +584,109 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Cupertino-Implementierung für Störungsbeschreibung
   Widget _buildCupertinoTroubleDescription() {
     return CupertinoFormSection.insetGrouped(
-      margin: EdgeInsets.zero,
-      header: Text(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      header: const Text(
         'Störungsbeschreibung',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: CupertinoColors.activeBlue,
         ),
       ),
-      footer: Text(
+      footer: const Text(
         'Beschreiben Sie das Problem so genau wie möglich',
-        style: TextStyle(color: CupertinoColors.systemGrey),
+        style: TextStyle(
+          fontSize: 13,
+          color: CupertinoColors.systemGrey,
+        ),
       ),
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-          child: CupertinoTextField(
-            controller: _descriptionController,
-            placeholder: 'Beschreibung des Problems *',
-            focusNode: _descriptionFocus,
-            onSubmitted: (_) => _alternativeContactFocus.requestFocus(),
-            clearButtonMode: OverlayVisibilityMode.editing,
-            minLines: 3,
-            maxLines: 5,
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(5),
-            ),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Beschreibung *',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.label,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CupertinoTextField(
+                controller: _descriptionController,
+                placeholder: 'Beschreibung des Problems',
+                focusNode: _descriptionFocus,
+                onSubmitted: (_) => _alternativeContactFocus.requestFocus(),
+                clearButtonMode: OverlayVisibilityMode.editing,
+                minLines: 4,
+                maxLines: 6,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey6,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: CupertinoColors.systemGrey4,
+                    width: 0.5,
+                  ),
+                ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.label,
+                ),
+                placeholderStyle: const TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+            ],
           ),
         ),
-        CupertinoFormRow(
-          prefix: const Text('Alternative Kontaktmöglichkeit'),
-          child: CupertinoTextField.borderless(
-            controller: _alternativeContactController,
-            placeholder: 'z.B. alternative E-Mail oder Telefonnummer',
-            focusNode: _alternativeContactFocus,
-            clearButtonMode: OverlayVisibilityMode.editing,
-            textAlign: TextAlign.end,
-          ),
+        _buildCupertinoFormRow(
+          label: 'Alternative Kontaktmöglichkeit',
+          placeholder: 'z.B. alternative E-Mail',
+          controller: _alternativeContactController,
+          keyboardType: TextInputType.text,
+          focusNode: _alternativeContactFocus,
         ),
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                borderRadius: BorderRadius.circular(10),
                 onPressed: _showCupertinoImagePickerOptions,
-                child: Text(
-                  _images.isEmpty
-                      ? 'Fotos hinzufügen'
-                      : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.photo_camera, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _images.isEmpty
+                          ? 'Fotos hinzufügen'
+                          : '${_images.length} Foto${_images.length == 1 ? '' : 's'} ausgewählt',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
                 ),
               ),
-              if (_isLoading)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: const CupertinoActivityIndicator(radius: 15.0),
+              if (_isLoading) ...[
+                const SizedBox(height: 16),
+                const Center(
+                  child: CupertinoActivityIndicator(radius: 12),
                 ),
+              ],
               if (_images.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 SizedBox(
-                  height: 100,
+                  height: 90,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _images.length,
@@ -749,18 +704,25 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Cupertino-Implementierung der Dringlichkeitsauswahl
   Widget _buildCupertinoUrgencySection() {
     return CupertinoFormSection.insetGrouped(
-      margin: EdgeInsets.zero,
-      header: Text(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      header: const Text(
         'Dringlichkeit',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: CupertinoColors.activeBlue,
         ),
       ),
-      footer: Text(
+      footer: const Text(
         'Wie dringend benötigen Sie Unterstützung?',
-        style: TextStyle(color: CupertinoColors.systemGrey),
+        style: TextStyle(
+          fontSize: 13,
+          color: CupertinoColors.systemGrey,
+        ),
       ),
       children: [
         Padding(
@@ -768,35 +730,20 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           child: CupertinoSegmentedControl<UrgencyLevel>(
             padding: EdgeInsets.zero,
             children: {
-              UrgencyLevel.low: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Column(
-                  children: [
-                    Icon(CupertinoIcons.checkmark_circle, color: CupertinoColors.systemGreen),
-                    const SizedBox(height: 5),
-                    const Text('Niedrig', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
+              UrgencyLevel.low: _buildUrgencySegment(
+                'Niedrig',
+                CupertinoIcons.checkmark_circle,
+                CupertinoColors.systemGreen,
               ),
-              UrgencyLevel.medium: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Column(
-                  children: [
-                    Icon(CupertinoIcons.exclamationmark_circle, color: CupertinoColors.systemOrange),
-                    const SizedBox(height: 5),
-                    const Text('Mittel', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
+              UrgencyLevel.medium: _buildUrgencySegment(
+                'Mittel',
+                CupertinoIcons.exclamationmark_circle,
+                CupertinoColors.systemOrange,
               ),
-              UrgencyLevel.high: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Column(
-                  children: [
-                    Icon(CupertinoIcons.exclamationmark_triangle, color: CupertinoColors.systemRed),
-                    const SizedBox(height: 5),
-                    const Text('Hoch', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
+              UrgencyLevel.high: _buildUrgencySegment(
+                'Hoch',
+                CupertinoIcons.exclamationmark_triangle,
+                CupertinoColors.systemRed,
               ),
             },
             onValueChanged: (value) {
@@ -810,158 +757,88 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
             child: Text(
               _selectedUrgencyLevel!.description,
-              style: TextStyle(color: CupertinoColors.systemGrey),
+              style: const TextStyle(
+                fontSize: 14,
+                color: CupertinoColors.systemGrey,
+              ),
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Wie zufrieden sind Sie mit dem Service bisher?',
-                  style: TextStyle(color: CupertinoColors.systemGrey),
-                ),
-              ),
-              Text('${_ratingValue.toInt()} / 5'),
-            ],
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+          child: Text(
+            'Ihre Zufriedenheit mit dem Service bisher:',
+            style: TextStyle(
+              fontSize: 15,
+              color: CupertinoColors.label,
+            ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-          child: CupertinoSlider(
-            value: _ratingValue,
-            min: 0.0,
-            max: 5.0,
-            divisions: 5,
-            onChanged: (value) {
-              setState(() {
-                _ratingValue = value;
-              });
-            },
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '0',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+              Expanded(
+                child: CupertinoSlider(
+                  value: _ratingValue,
+                  min: 0.0,
+                  max: 5.0,
+                  divisions: 5,
+                  onChanged: (value) {
+                    setState(() {
+                      _ratingValue = value;
+                    });
+                  },
+                ),
+              ),
+              const Text(
+                '5',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              '${_ratingValue.toInt()} Sterne',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: CupertinoColors.activeBlue,
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  // Gesamte Urgency-Sektion mit Plattform-Auswahl
-  Widget _buildUrgencySection() {
-    return Platform.isIOS 
-        ? _buildCupertinoUrgencySection() 
-        : _buildMaterialUrgencySection();
-  }
-
-  // Material-Implementierung der Dringlichkeitsauswahl (original)
-  Widget _buildMaterialUrgencySection() {
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.withAlpha(51),
-        ),
-      ),
+  // Helfer-Methode zum Erstellen eines Segments in der Dringlichkeitsauswahl
+  Widget _buildUrgencySegment(String text, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: _buildSectionHeader(
-              'Dringlichkeit',
-              'Wie dringend benötigen Sie Unterstützung?',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-            child: Column(
-              children: UrgencyLevel.values.map((level) {
-                final isSelected = _selectedUrgencyLevel == level;
-                // Farbkodierung basierend auf Dringlichkeitsstufe
-                Color urgencyColor;
-                switch (level) {
-                  case UrgencyLevel.high:
-                    urgencyColor = Colors.redAccent;
-                    break;
-                  case UrgencyLevel.medium:
-                    urgencyColor = Colors.orangeAccent;
-                    break;
-                  case UrgencyLevel.low:
-                    urgencyColor = Colors.greenAccent;
-                    break;
-                }
-                
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    decoration: BoxDecoration(
-                      color: isSelected ? urgencyColor.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? urgencyColor : Colors.grey.withOpacity(0.3),
-                        width: isSelected ? 2 : 1,
-                      ),
-                      boxShadow: isSelected
-                        ? [BoxShadow(color: urgencyColor.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))]
-                        : [],
-                    ),
-                    child: InkWell(
-                      onTap: () => _updateUrgencyLevel(level),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isSelected ? urgencyColor : Colors.transparent,
-                                border: Border.all(
-                                  color: isSelected ? urgencyColor : Colors.grey,
-                                  width: 2,
-                                ),
-                              ),
-                              child: isSelected
-                                ? const Icon(Icons.check, size: 16, color: Colors.white)
-                                : null,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    level.label,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      color: isSelected ? urgencyColor : Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    level.description,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -969,38 +846,139 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  // Bild-Vorschau für Cupertino
-  Widget _buildCupertinoImagePreview(BuildContext context, int index) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: CupertinoContextMenu(
-        actions: [
-          CupertinoContextMenuAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _showImage(index);
-            },
-            trailingIcon: CupertinoIcons.eye,
-            child: const Text('Anzeigen'),
-          ),
-          CupertinoContextMenuAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _removeImage(index);
-            },
-            isDestructiveAction: true,
-            trailingIcon: CupertinoIcons.delete,
-            child: const Text('Löschen'),
-          ),
-        ],
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.file(
-            _images[index],
-            height: 100,
-            width: 100,
-            fit: BoxFit.cover,
-          ),
+  // Methode zum Anzeigen des Cupertino Pickers für die Art des Anliegens
+  void _showCupertinoRequestTypePicker() {
+    int selectedIndex = _selectedType != null 
+        ? RequestType.values.indexOf(_selectedType!)
+        : 0;
+        
+    showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 250,
+        color: CupertinoColors.systemBackground,
+        child: Column(
+          children: [
+            Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground,
+                border: Border(
+                  bottom: BorderSide(
+                    color: CupertinoColors.systemGrey5,
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: const Text('Abbrechen'),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: const Text('Fertig'),
+                    onPressed: () {
+                      final selectedType = RequestType.values[selectedIndex];
+                      Navigator.pop(context);
+                      Future.delayed(Duration.zero, () {
+                        if (mounted) {
+                          _updateRequestType(selectedType);
+                        }
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoPicker(
+                magnification: 1.1,
+                squeeze: 1.1,
+                useMagnifier: true,
+                itemExtent: 32,
+                scrollController: FixedExtentScrollController(
+                  initialItem: selectedIndex,
+                ),
+                onSelectedItemChanged: (int selectedItem) {
+                  selectedIndex = selectedItem;
+                },
+                children: 
+                  RequestType.values.map(
+                    (type) => Center(
+                      child: Text(
+                        type.label,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: CupertinoColors.label,
+                        ),
+                      ),
+                    ),
+                  ).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Methode zum Anzeigen des CupertinoDatePickers
+  void _showCupertinoDatePicker() {
+    DateTime initialDate = _selectedDate ?? DateTime.now();
+    
+    showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 250,
+        color: CupertinoColors.systemBackground,
+        child: Column(
+          children: [
+            Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground,
+                border: Border(
+                  bottom: BorderSide(
+                    color: CupertinoColors.systemGrey5,
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: const Text('Abbrechen'),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: const Text('Fertig'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                initialDateTime: initialDate,
+                mode: CupertinoDatePickerMode.date,
+                maximumDate: DateTime.now(),
+                minimumDate: DateTime(2000),
+                use24hFormat: true,
+                onDateTimeChanged: (DateTime newDateTime) {
+                  _updateDate(newDateTime);
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1052,104 +1030,45 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  Future<void> _showDatePicker() async {
-    if (Platform.isIOS) {
-      _showCupertinoDatePicker();
-    } else {
-      // Material Date Picker für Android-Geräte (bisherige Implementierung)
-      final DateTime? picked = await showDatePicker(
-        context: context,
-        initialDate: _selectedDate ?? DateTime.now(),
-        firstDate: DateTime(2000),
-        lastDate: DateTime.now(),
-        builder: (context, child) {
-          return Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: ColorScheme.light(
-                primary: Theme.of(context).primaryColor,
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Colors.black,
-              ),
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).primaryColor,
-                ),
-              ),
-            ),
-            child: child!,
-          );
-        },
-      );
-      
-      if (picked != null && mounted) {
-        _updateDate(picked);
-      }
-    }
-  }
-
-  // Methode zum Anzeigen des CupertinoDatePickers
-  void _showCupertinoDatePicker() {
-    DateTime initialDate = _selectedDate ?? DateTime.now();
-    
-    showCupertinoModalPopup(
-      context: context,
-      builder: (BuildContext context) => SizedBox(
-        height: 250,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(12),
-            topRight: Radius.circular(12),
+  // Bild-Vorschau für Cupertino
+  Widget _buildCupertinoImagePreview(BuildContext context, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: CupertinoContextMenu(
+        actions: [
+          CupertinoContextMenuAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showCupertinoImage(index);
+            },
+            trailingIcon: CupertinoIcons.eye,
+            child: const Text('Anzeigen'),
           ),
+          CupertinoContextMenuAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeImage(index);
+            },
+            isDestructiveAction: true,
+            trailingIcon: CupertinoIcons.delete,
+            child: const Text('Löschen'),
+          ),
+        ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
           child: Container(
-            color: CupertinoColors.systemBackground.resolveFrom(context),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                children: [
-                  Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.systemBackground.resolveFrom(context),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: CupertinoColors.systemGrey5.resolveFrom(context),
-                          width: 0.5,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          child: const Text('Abbrechen'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          child: const Text('Fertig'),
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: CupertinoDatePicker(
-                      initialDateTime: initialDate,
-                      mode: CupertinoDatePickerMode.date,
-                      maximumDate: DateTime.now(),
-                      minimumDate: DateTime(2000),
-                      use24hFormat: true,
-                      onDateTimeChanged: (DateTime newDateTime) {
-                        _updateDate(newDateTime);
-                      },
-                    ),
-                  ),
-                ],
+            height: 90,
+            width: 90,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: CupertinoColors.systemGrey4,
+                width: 0.5,
               ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Image.file(
+              _images[index],
+              fit: BoxFit.cover,
             ),
           ),
         ),
@@ -1157,94 +1076,25 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  // Material-Bildvorschau
-  Widget _buildImagePreview(BuildContext context, int index) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: Stack(
-        children: [
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => _showImage(index),
-              child: Image.file(
-                _images[index],
-                height: 120,
-                width: 120,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 4,
-            top: 4,
-            child: Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => _removeImage(index),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.close,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showImage(int index) {
-    showDialog(
+  // Bild in Vollansicht anzeigen (Cupertino-Stil)
+  void _showCupertinoImage(int index) {
+    showCupertinoDialog(
       context: context,
-      builder: (context) => Dialog(
-        child: Stack(
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InteractiveViewer(
-                  child: Image.file(_images[index]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => _removeImage(index),
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        label: const Text('Löschen', style: TextStyle(color: Colors.red)),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                        label: const Text('Schließen'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      builder: (context) => CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text('Bildvorschau'),
+          trailing: CupertinoButton(
+            padding: EdgeInsets.zero,
+            child: const Text('Fertig'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: InteractiveViewer(
+              child: Image.file(_images[index]),
             ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black.withAlpha(128),
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1428,7 +1278,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 ),
                 child: Text(dateText),
               ),
-            ),
           ],
         ),
       ),
@@ -1504,6 +1353,346 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Material-Implementierung des Anliegens-Auswahlbereichs (original)
+  Widget _buildMaterialRequestTypeSection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.withAlpha(51),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildSectionHeader(
+              'Art des Anliegens',
+              'Wählen Sie die passende Kategorie',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+            child: Wrap(
+              spacing: 12.0,
+              runSpacing: 12.0,
+              children: RequestType.values.map((type) {
+                final isSelected = _selectedType == type;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3),
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                      ? [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))]
+                      : [],
+                  ),
+                  child: InkWell(
+                    onTap: () => _updateRequestType(type),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? Colors.blue : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected ? Colors.blue : Colors.grey,
+                                width: 2,
+                              ),
+                            ),
+                            child: isSelected
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              type.label,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isSelected ? Colors.blue : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Material-Implementierung der Dringlichkeitsauswahl
+  Widget _buildMaterialUrgencySection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.withAlpha(51),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildSectionHeader(
+              'Dringlichkeit',
+              'Wie dringend benötigen Sie Unterstützung?',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+            child: Column(
+              children: UrgencyLevel.values.map((level) {
+                final isSelected = _selectedUrgencyLevel == level;
+                // Farbkodierung basierend auf Dringlichkeitsstufe
+                Color urgencyColor;
+                switch (level) {
+                  case UrgencyLevel.high:
+                    urgencyColor = Colors.redAccent;
+                    break;
+                  case UrgencyLevel.medium:
+                    urgencyColor = Colors.orangeAccent;
+                    break;
+                  case UrgencyLevel.low:
+                    urgencyColor = Colors.greenAccent;
+                    break;
+                }
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      color: isSelected ? urgencyColor.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? urgencyColor : Colors.grey.withOpacity(0.3),
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: isSelected
+                        ? [BoxShadow(color: urgencyColor.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))]
+                        : [],
+                    ),
+                    child: InkWell(
+                      onTap: () => _updateUrgencyLevel(level),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? urgencyColor : Colors.transparent,
+                                border: Border.all(
+                                  color: isSelected ? urgencyColor : Colors.grey,
+                                  width: 2,
+                                ),
+                              ),
+                              child: isSelected
+                                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    level.label,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? urgencyColor : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    level.description,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Material-Version des DatePickers
+  Future<void> _showDatePicker() async {
+    if (Platform.isIOS) {
+      _showCupertinoDatePicker();
+    } else {
+      // Material Date Picker für Android-Geräte
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime.now(),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Theme.of(context).primaryColor,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black,
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).primaryColor,
+                ),
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      
+      if (picked != null && mounted) {
+        _updateDate(picked);
+      }
+    }
+  }
+
+  // Material-Bildvorschau
+  Widget _buildImagePreview(BuildContext context, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: Stack(
+        children: [
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _showImage(index),
+              child: Image.file(
+                _images[index],
+                height: 120,
+                width: 120,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _removeImage(index),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Material-Dialog für Bildvorschau
+  void _showImage(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Stack(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InteractiveViewer(
+                  child: Image.file(_images[index]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _removeImage(index),
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        label: const Text('Löschen', style: TextStyle(color: Colors.red)),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        label: const Text('Schließen'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withAlpha(128),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
           ],
         ),
       ),
