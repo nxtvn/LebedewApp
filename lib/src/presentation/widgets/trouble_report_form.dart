@@ -315,24 +315,30 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         color: CupertinoColors.systemBackground,
         borderRadius: BorderRadius.circular(10),
       ),
-      header: const Text(
-        'Art des Anliegens',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: CupertinoColors.activeBlue,
-        ),
-      ),
-      footer: const Text(
-        'Wählen Sie die passende Kategorie aus',
-        style: TextStyle(
-          fontSize: 13,
-          color: CupertinoColors.systemGrey,
-        ),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Art des Anliegens',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.activeBlue,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Wählen Sie die passende Kategorie aus',
+            style: TextStyle(
+              fontSize: 13,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ],
       ),
       children: [
         CupertinoFormRow(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           prefix: const Text(
             'Kategorie',
             style: TextStyle(
@@ -371,25 +377,31 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Cupertino-Implementierung für persönliche Daten
   Widget _buildCupertinoPersonalData() {
     return CupertinoFormSection.insetGrouped(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground,
         borderRadius: BorderRadius.circular(10),
       ),
-      header: const Text(
-        'Persönliche Daten',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: CupertinoColors.activeBlue,
-        ),
-      ),
-      footer: const Text(
-        'Ihre Kontaktinformationen',
-        style: TextStyle(
-          fontSize: 13,
-          color: CupertinoColors.systemGrey,
-        ),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Persönliche Daten',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.activeBlue,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Ihre Kontaktinformationen',
+            style: TextStyle(
+              fontSize: 13,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ],
       ),
       children: [
         _buildCupertinoFormRow(
@@ -442,7 +454,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     bool multiline = false,
   }) {
     return CupertinoFormRow(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       prefix: Text(
         label,
         style: const TextStyle(
@@ -481,25 +493,31 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         : 'Bitte wählen';
 
     return CupertinoFormSection.insetGrouped(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground,
         borderRadius: BorderRadius.circular(10),
       ),
-      header: const Text(
-        'Gerätedaten',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: CupertinoColors.activeBlue,
-        ),
-      ),
-      footer: const Text(
-        'Informationen zum betroffenen Gerät',
-        style: TextStyle(
-          fontSize: 13,
-          color: CupertinoColors.systemGrey,
-        ),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Gerätedaten',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.activeBlue,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Informationen zum betroffenen Gerät',
+            style: TextStyle(
+              fontSize: 13,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ],
       ),
       children: [
         _buildCupertinoFormRow(
@@ -544,7 +562,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           multiline: true,
         ),
         CupertinoFormRow(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           prefix: const Text(
             'Datum des Vorfalls',
             style: TextStyle(
@@ -584,25 +602,31 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Cupertino-Implementierung für Störungsbeschreibung
   Widget _buildCupertinoTroubleDescription() {
     return CupertinoFormSection.insetGrouped(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground,
         borderRadius: BorderRadius.circular(10),
       ),
-      header: const Text(
-        'Störungsbeschreibung',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: CupertinoColors.activeBlue,
-        ),
-      ),
-      footer: const Text(
-        'Beschreiben Sie das Problem so genau wie möglich',
-        style: TextStyle(
-          fontSize: 13,
-          color: CupertinoColors.systemGrey,
-        ),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Störungsbeschreibung',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.activeBlue,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Beschreiben Sie das Problem so genau wie möglich',
+            style: TextStyle(
+              fontSize: 13,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ],
       ),
       children: [
         Padding(
@@ -617,7 +641,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                   color: CupertinoColors.label,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               CupertinoTextField(
                 controller: _descriptionController,
                 placeholder: 'Beschreibung des Problems',
@@ -626,7 +650,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 clearButtonMode: OverlayVisibilityMode.editing,
                 minLines: 4,
                 maxLines: 6,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(8),
@@ -655,19 +679,19 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           focusNode: _alternativeContactFocus,
         ),
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 borderRadius: BorderRadius.circular(10),
                 onPressed: _showCupertinoImagePickerOptions,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(CupertinoIcons.photo_camera, size: 20),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Text(
                       _images.isEmpty
                           ? 'Fotos hinzufügen'
@@ -684,14 +708,56 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 ),
               ],
               if (_images.isNotEmpty) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 SizedBox(
-                  height: 90,
+                  height: 100,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _images.length,
                     itemBuilder: _buildCupertinoImagePreview,
                   ),
+                ),
+                const SizedBox(height: 10),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  onPressed: () {
+                    if (_images.isNotEmpty) {
+                      showCupertinoModalPopup(
+                        context: context,
+                        builder: (context) => CupertinoActionSheet(
+                          title: const Text('Fotos verwalten'),
+                          message: const Text('Was möchten Sie mit den Fotos tun?'),
+                          actions: [
+                            CupertinoActionSheetAction(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showCupertinoImagePickerOptions();
+                              },
+                              child: const Text('Weitere Fotos hinzufügen'),
+                            ),
+                            CupertinoActionSheetAction(
+                              isDestructiveAction: true,
+                              onPressed: () {
+                                Navigator.pop(context);
+                                setState(() {
+                                  _images.clear();
+                                  while (_viewModel.images.isNotEmpty) {
+                                    _viewModel.removeImagePath(0);
+                                  }
+                                });
+                              },
+                              child: const Text('Alle Fotos entfernen'),
+                            ),
+                          ],
+                          cancelButton: CupertinoActionSheetAction(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Abbrechen'),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Fotos verwalten'),
                 ),
               ],
             ],
@@ -704,29 +770,35 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Cupertino-Implementierung der Dringlichkeitsauswahl
   Widget _buildCupertinoUrgencySection() {
     return CupertinoFormSection.insetGrouped(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground,
         borderRadius: BorderRadius.circular(10),
       ),
-      header: const Text(
-        'Dringlichkeit',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: CupertinoColors.activeBlue,
-        ),
-      ),
-      footer: const Text(
-        'Wie dringend benötigen Sie Unterstützung?',
-        style: TextStyle(
-          fontSize: 13,
-          color: CupertinoColors.systemGrey,
-        ),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Dringlichkeit',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.activeBlue,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Wie dringend benötigen Sie Unterstützung?',
+            style: TextStyle(
+              fontSize: 13,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ],
       ),
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
           child: CupertinoSegmentedControl<UrgencyLevel>(
             padding: EdgeInsets.zero,
             children: {
@@ -754,7 +826,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         ),
         if (_selectedUrgencyLevel != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
             child: Text(
               _selectedUrgencyLevel!.description,
               style: const TextStyle(
@@ -764,7 +836,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             ),
           ),
         const Padding(
-          padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+          padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
           child: Text(
             'Ihre Zufriedenheit mit dem Service bisher:',
             style: TextStyle(
@@ -774,7 +846,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+          padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -810,7 +882,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         ),
         Center(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.fromLTRB(0, 8.0, 0, 16.0),
             child: Text(
               '${_ratingValue.toInt()} Sterne',
               style: const TextStyle(
@@ -1278,6 +1350,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 ),
                 child: Text(dateText),
               ),
+            ),
           ],
         ),
       ),
