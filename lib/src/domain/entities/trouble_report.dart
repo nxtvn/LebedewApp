@@ -17,7 +17,6 @@ class TroubleReport {
   final DateTime? occurrenceDate;
   final String? serviceHistory;
   final UrgencyLevel urgencyLevel;
-  final String? alternativeContact;
   final List<String> imagesPaths;
 
   TroubleReport({
@@ -36,7 +35,6 @@ class TroubleReport {
     this.occurrenceDate,
     this.serviceHistory,
     required this.urgencyLevel,
-    this.alternativeContact,
     this.imagesPaths = const [],
   });
 
@@ -56,7 +54,6 @@ class TroubleReport {
     'occurrenceDate': occurrenceDate?.toIso8601String(),
     'serviceHistory': serviceHistory,
     'urgencyLevel': urgencyLevel.name,
-    'alternativeContact': alternativeContact,
     'imagesPaths': imagesPaths,
   };
 
@@ -78,7 +75,6 @@ class TroubleReport {
       : null,
     serviceHistory: json['serviceHistory'],
     urgencyLevel: UrgencyLevel.values.firstWhere((e) => e.name == json['urgencyLevel']),
-    alternativeContact: json['alternativeContact'],
     imagesPaths: List<String>.from(json['imagesPaths'] ?? []),
   );
 } 

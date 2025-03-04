@@ -29,7 +29,6 @@ class TroubleReportViewModel extends ChangeNotifier {
   String? _serviceHistory;
   String? _previousIssues;
   UrgencyLevel? _urgencyLevel;
-  String? _alternativeContact;
 
   bool _isLoading = false;
   String? _error;
@@ -52,7 +51,6 @@ class TroubleReportViewModel extends ChangeNotifier {
   String? get serviceHistory => _serviceHistory;
   String? get previousIssues => _previousIssues;
   UrgencyLevel? get urgencyLevel => _urgencyLevel;
-  String? get alternativeContact => _alternativeContact;
   bool get isLoading => _isLoading;
   String? get error => _error;
   TroubleReportRepository get repository => _repository;
@@ -162,11 +160,6 @@ class TroubleReportViewModel extends ChangeNotifier {
     }
   }
 
-  void setAlternativeContact(String? value) {
-    _alternativeContact = value;
-    notifyListeners();
-  }
-
   Future<bool> submitReport() async {
     _isLoading = true;
     notifyListeners();
@@ -188,7 +181,6 @@ class TroubleReportViewModel extends ChangeNotifier {
         occurrenceDate: _occurrenceDate,
         serviceHistory: _serviceHistory,
         urgencyLevel: _urgencyLevel ?? UrgencyLevel.medium,
-        alternativeContact: _alternativeContact,
         imagesPaths: _imagesPaths,
       );
 
@@ -215,7 +207,6 @@ class TroubleReportViewModel extends ChangeNotifier {
     _occurrenceDate = null;
     _serviceHistory = null;
     _urgencyLevel = UrgencyLevel.medium;
-    _alternativeContact = null;
     _imagesPaths.clear();
     _images.clear();
     notifyListeners();

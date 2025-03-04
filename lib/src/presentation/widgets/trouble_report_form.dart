@@ -13,9 +13,11 @@ import '../../core/utils/validators.dart';
 
 class TroubleReportForm extends StatefulWidget {
   final GlobalKey<FormState> formKey;
+  final VoidCallback? onSubmit;
   
   const TroubleReportForm({
     required this.formKey,
+    this.onSubmit,
     super.key,
   });
 
@@ -36,7 +38,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   final TextEditingController _errorCodeController = TextEditingController();
   final TextEditingController _serviceHistoryController = TextEditingController();
   final TextEditingController _previousIssuesController = TextEditingController();
-  final TextEditingController _alternativeContactController = TextEditingController();
   
   // FocusNodes für jedes Textfeld
   final FocusNode _descriptionFocus = FocusNode();
@@ -50,7 +51,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   final FocusNode _errorCodeFocus = FocusNode();
   final FocusNode _serviceHistoryFocus = FocusNode();
   final FocusNode _previousIssuesFocus = FocusNode();
-  final FocusNode _alternativeContactFocus = FocusNode();
   
   // Lokale Zustandsvariablen für Auswahlwerte
   RequestType? _selectedType;
@@ -58,6 +58,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   DateTime? _selectedDate;
   double _ratingValue = 0.0; // Für CupertinoSlider
   bool _isLoading = false; // Für CupertinoActivityIndicator
+  bool _formWasSubmitted = false; // Zeigt an, ob das Formular abgesendet wurde
   
   final List<File> _images = [];
   final ScrollController _scrollController = ScrollController();
@@ -99,7 +100,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       _serialNumberController.text = _viewModel.serialNumber ?? '';
       _errorCodeController.text = _viewModel.errorCode ?? '';
       _serviceHistoryController.text = _viewModel.serviceHistory ?? '';
-      _alternativeContactController.text = _viewModel.alternativeContact ?? '';
+      _previousIssuesController.text = _viewModel.previousIssues ?? '';
     });
   }
 
@@ -116,7 +117,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     _errorCodeController.addListener(() => _viewModel.setErrorCode(_errorCodeController.text));
     _serviceHistoryController.addListener(() => _viewModel.setServiceHistory(_serviceHistoryController.text));
     _previousIssuesController.addListener(() => _viewModel.setPreviousIssues(_previousIssuesController.text));
-    _alternativeContactController.addListener(() => _viewModel.setAlternativeContact(_alternativeContactController.text));
   }
 
   void reset() {
@@ -136,7 +136,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       _serialNumberController.clear();
       _errorCodeController.clear();
       _serviceHistoryController.clear();
-      _alternativeContactController.clear();
+      _previousIssuesController.clear();
     });
   }
 
@@ -154,7 +154,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     _errorCodeController.dispose();
     _serviceHistoryController.dispose();
     _previousIssuesController.dispose();
-    _alternativeContactController.dispose();
     
     // FocusNodes aufräumen
     _descriptionFocus.dispose();
@@ -168,7 +167,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     _errorCodeFocus.dispose();
     _serviceHistoryFocus.dispose();
     _previousIssuesFocus.dispose();
-    _alternativeContactFocus.dispose();
     
     _scrollController.dispose();
     super.dispose();
@@ -198,8 +196,20 @@ class TroubleReportFormState extends State<TroubleReportForm> {
 
   void _removeImage(int index) {
     if (index >= 0 && index < _images.length) {
+      // Fokus vorübergehend entfernen, um Fokus-Sprünge zu vermeiden
+      final currentFocus = FocusScope.of(context).focusedChild;
+      FocusScope.of(context).unfocus();
+      
       setState(() => _images.removeAt(index));
       _viewModel.removeImagePath(index);
+      
+      // Kurze Verzögerung, damit setState abgeschlossen ist
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && currentFocus != null) {
+          // Fokus wieder auf den vorherigen Bereich setzen
+          FocusScope.of(context).requestFocus(currentFocus);
+        }
+      });
     }
   }
 
@@ -214,24 +224,47 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       if (source == ImageSource.gallery) {
         final List<XFile> pickedFiles = await picker.pickMultiImage();
         if (pickedFiles.isNotEmpty && mounted) {
+          // Duplikate zählen
+          int duplicateCount = 0;
+          
           for (final file in pickedFiles) {
             final imageFile = File(file.path);
+            
+            // Prüfen, ob ein Bild mit dem gleichen Pfad bereits existiert
+            bool isDuplicate = await _isImageDuplicate(imageFile);
+            if (isDuplicate) {
+              duplicateCount++;
+              continue;
+            }
+            
             setState(() {
               _images.add(imageFile);
             });
             final path = await _viewModel.repository.saveImage(imageFile);
             _viewModel.addImagePath(path);
           }
+          
+          // Benutzer informieren, wenn Duplikate gefunden wurden
+          if (duplicateCount > 0 && mounted) {
+            _showDuplicateImageMessage(duplicateCount);
+          }
         }
       } else {
         final XFile? pickedFile = await picker.pickImage(source: source);
         if (pickedFile != null && mounted) {
           final imageFile = File(pickedFile.path);
-          setState(() {
-            _images.add(imageFile);
-          });
-          final path = await _viewModel.repository.saveImage(imageFile);
-          _viewModel.addImagePath(path);
+          
+          // Prüfen, ob ein Bild mit dem gleichen Pfad bereits existiert
+          bool isDuplicate = await _isImageDuplicate(imageFile);
+          if (isDuplicate) {
+            _showDuplicateImageMessage(1);
+          } else {
+            setState(() {
+              _images.add(imageFile);
+            });
+            final path = await _viewModel.repository.saveImage(imageFile);
+            _viewModel.addImagePath(path);
+          }
         }
       }
     } finally {
@@ -240,6 +273,92 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           _isLoading = false;
         });
       }
+    }
+  }
+  
+  // Hilfsmethode zum Prüfen, ob ein Bild bereits in der Liste ist
+  Future<bool> _isImageDuplicate(File newImage) async {
+    for (final existingImage in _images) {
+      if (existingImage.path == newImage.path) {
+        return true;
+      }
+      
+      // Wenn Pfade unterschiedlich sind, prüfe Größe und Zeitstempel
+      if (await _isSameImage(existingImage, newImage)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  // Verbessere die Duplikaterkennung in der _isSameImage-Methode
+  Future<bool> _isSameImage(File image1, File image2) async {
+    // Direkte Pfadprüfung als erster Check
+    if (image1.path == image2.path) {
+      return true;
+    }
+    
+    try {
+      // Vergleiche Dateigröße als schnellen Check
+      final size1 = await image1.length();
+      final size2 = await image2.length();
+      if (size1 != size2) {
+        return false;
+      }
+      
+      // Bei gleicher Dateigröße, vergleiche die letzten Änderungszeitstempel
+      final stat1 = await image1.stat();
+      final stat2 = await image2.stat();
+      
+      // Wir betrachten Bilder als identisch, wenn sie gleich groß sind und
+      // der Zeitunterschied ihrer letzten Änderung weniger als 1 Sekunde beträgt
+      final isSameSize = stat1.size == stat2.size;
+      final isCloseTimeStamp = (stat1.modified.difference(stat2.modified).inMilliseconds.abs() < 2000);
+      
+      if (isSameSize && isCloseTimeStamp) {
+        print('Duplikat gefunden: ${image1.path} und ${image2.path}');
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('Fehler beim Vergleichen der Bilder: $e');
+      // Bei Fehler sicherheitshalber als kein Duplikat behandeln
+      return false;
+    }
+  }
+
+  // Zeigt eine Meldung an, wenn Duplikate gefunden wurden
+  void _showDuplicateImageMessage(int count) {
+    if (Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Hinweis'),
+          content: Text(
+            count == 1
+                ? 'Dieses Bild wurde bereits hinzugefügt und wird übersprungen.'
+                : '$count Bilder wurden bereits hinzugefügt und werden übersprungen.'
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 1
+                ? 'Dieses Bild wurde bereits hinzugefügt und wird übersprungen.'
+                : '$count Bilder wurden bereits hinzugefügt und werden übersprungen.'
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -260,7 +379,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           AppConstants.defaultPadding / 2,
           AppConstants.defaultPadding,
           AppConstants.defaultPadding / 2,
-          AppConstants.defaultPadding + 80,
+          AppConstants.defaultPadding,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -274,6 +393,9 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             _buildTroubleDescription(),
             const SizedBox(height: AppConstants.defaultPadding / 2),
             _buildMaterialUrgencySection(),
+            const SizedBox(height: AppConstants.defaultPadding),
+            _buildMaterialSubmitButton(),
+            const SizedBox(height: AppConstants.defaultPadding),
           ],
         ),
       ),
@@ -290,7 +412,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           child: SingleChildScrollView(
             controller: _scrollController,
             physics: const ClampingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 80),
             child: Column(
               children: [
                 _buildCupertinoRequestTypeSection(),
@@ -298,7 +419,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                 _buildCupertinoDeviceData(),
                 _buildCupertinoTroubleDescription(),
                 _buildCupertinoUrgencySection(),
-                const SizedBox(height: 20),
+                _buildCupertinoSubmitButton(),
               ],
             ),
           ),
@@ -319,7 +440,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Text(
-            'Art des Anliegens',
+            'Art des Anliegens *',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -340,7 +461,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         CupertinoFormRow(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           prefix: const Text(
-            'Kategorie',
+            'Kategorie *',
             style: TextStyle(
               fontSize: 16,
               color: CupertinoColors.label,
@@ -423,12 +544,13 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           validator: Validators.validateEmail,
         ),
         _buildCupertinoFormRow(
-          label: 'Telefon',
+          label: 'Telefon *',
           placeholder: 'Ihre Telefonnummer',
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           focusNode: _phoneFocus,
           nextFocus: _addressFocus,
+          validator: (value) => Validators.validateRequired(value, 'Telefonnummer'),
         ),
         _buildCupertinoFormRow(
           label: 'Adresse',
@@ -462,6 +584,9 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           color: CupertinoColors.label,
         ),
       ),
+      error: validator != null && controller.text.isNotEmpty 
+          ? (validator(controller.text) == null ? null : Text(validator(controller.text)!)) 
+          : null,
       child: CupertinoTextField.borderless(
         controller: controller,
         placeholder: placeholder,
@@ -522,7 +647,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       children: [
         _buildCupertinoFormRow(
           label: 'Gerätemodell',
-          placeholder: 'z.B. iPhone 13',
+          placeholder: 'z.B. Vitodens 200-W',
           controller: _deviceModelController,
           keyboardType: TextInputType.text,
           focusNode: _deviceModelFocus,
@@ -530,7 +655,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         ),
         _buildCupertinoFormRow(
           label: 'Hersteller',
-          placeholder: 'z.B. Apple',
+          placeholder: 'z.B. Viessmann',
           controller: _manufacturerController,
           keyboardType: TextInputType.text,
           focusNode: _manufacturerFocus,
@@ -552,14 +677,46 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           focusNode: _errorCodeFocus,
           nextFocus: _serviceHistoryFocus,
         ),
-        _buildCupertinoFormRow(
-          label: 'Servicehistorie',
-          placeholder: 'Letzte Wartungen',
-          controller: _serviceHistoryController,
-          keyboardType: TextInputType.text,
-          focusNode: _serviceHistoryFocus,
-          nextFocus: _descriptionFocus,
-          multiline: true,
+        CupertinoFormRow(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          prefix: const Text(
+            'Servicehistorie',
+            style: TextStyle(
+              fontSize: 16,
+              color: CupertinoColors.label,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              CupertinoTextField.borderless(
+                controller: _serviceHistoryController,
+                placeholder: 'Letzte Wartungen oder Reparaturen (Datum und Art der Maßnahme)',
+                keyboardType: TextInputType.multiline,
+                focusNode: _serviceHistoryFocus,
+                onSubmitted: (_) => _descriptionFocus.requestFocus(),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                textAlign: TextAlign.end,
+                maxLines: 3,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.label,
+                ),
+                placeholderStyle: const TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.systemGrey,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.systemGrey4,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         CupertinoFormRow(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -644,9 +801,9 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               const SizedBox(height: 10),
               CupertinoTextField(
                 controller: _descriptionController,
-                placeholder: 'Beschreibung des Problems',
+                placeholder: 'Detaillierte Beschreibung des Problems (Fehlercodes, Symptome, Zeitpunkt des Auftretens)',
                 focusNode: _descriptionFocus,
-                onSubmitted: (_) => _alternativeContactFocus.requestFocus(),
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
                 clearButtonMode: OverlayVisibilityMode.editing,
                 minLines: 4,
                 maxLines: 6,
@@ -655,8 +812,10 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                   color: CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: CupertinoColors.systemGrey4,
-                    width: 0.5,
+                    color: _descriptionController.text.isEmpty && _formWasSubmitted
+                        ? CupertinoColors.systemRed
+                        : CupertinoColors.systemGrey4,
+                    width: _descriptionController.text.isEmpty && _formWasSubmitted ? 1.5 : 0.5,
                   ),
                 ),
                 style: const TextStyle(
@@ -668,15 +827,19 @@ class TroubleReportFormState extends State<TroubleReportForm> {
                   color: CupertinoColors.systemGrey,
                 ),
               ),
+              if (_descriptionController.text.isEmpty && _formWasSubmitted)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6.0, left: 4.0),
+                  child: Text(
+                    'Bitte geben Sie eine Problembeschreibung ein',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: CupertinoColors.systemRed,
+                    ),
+                  ),
+                ),
             ],
           ),
-        ),
-        _buildCupertinoFormRow(
-          label: 'Alternative Kontaktmöglichkeit',
-          placeholder: 'z.B. alternative E-Mail',
-          controller: _alternativeContactController,
-          keyboardType: TextInputType.text,
-          focusNode: _alternativeContactFocus,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
@@ -779,7 +942,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Text(
-            'Dringlichkeit',
+            'Dringlichkeit *',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -798,99 +961,124 @@ class TroubleReportFormState extends State<TroubleReportForm> {
       ),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-          child: CupertinoSegmentedControl<UrgencyLevel>(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            children: {
-              UrgencyLevel.low: _buildUrgencySegment(
-                'Niedrig',
-                CupertinoIcons.checkmark_circle,
-                CupertinoColors.systemGreen,
-              ),
-              UrgencyLevel.medium: _buildUrgencySegment(
-                'Mittel',
-                CupertinoIcons.exclamationmark_circle,
-                CupertinoColors.systemOrange,
-              ),
-              UrgencyLevel.high: _buildUrgencySegment(
-                'Hoch',
-                CupertinoIcons.exclamationmark_triangle,
-                CupertinoColors.systemRed,
-              ),
-            },
-            onValueChanged: (value) {
-              _updateUrgencyLevel(value);
-            },
-            groupValue: _selectedUrgencyLevel,
-          ),
-        ),
-        if (_selectedUrgencyLevel != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-            child: Text(
-              _selectedUrgencyLevel!.description,
-              style: const TextStyle(
-                fontSize: 14,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
-          ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
-          child: Text(
-            'Ihre Zufriedenheit mit dem Service bisher:',
-            style: TextStyle(
-              fontSize: 15,
-              color: CupertinoColors.label,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                '0',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: CupertinoColors.systemGrey,
+              Container(
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey6,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: CupertinoColors.systemGrey4,
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  children: UrgencyLevel.values.map((level) {
+                    final isSelected = _selectedUrgencyLevel == level;
+                    Color backgroundColor;
+                    Color textColor;
+                    IconData icon;
+                    String label;
+                    
+                    switch (level) {
+                      case UrgencyLevel.low:
+                        backgroundColor = isSelected 
+                            ? CupertinoColors.systemGreen.withOpacity(0.2) 
+                            : CupertinoColors.systemBackground;
+                        textColor = isSelected 
+                            ? CupertinoColors.systemGreen
+                            : CupertinoColors.systemGrey;
+                        icon = CupertinoIcons.checkmark_circle_fill;
+                        label = 'Niedrig';
+                        break;
+                      case UrgencyLevel.medium:
+                        backgroundColor = isSelected 
+                            ? CupertinoColors.systemOrange.withOpacity(0.2)
+                            : CupertinoColors.systemBackground;
+                        textColor = isSelected 
+                            ? CupertinoColors.systemOrange
+                            : CupertinoColors.systemGrey;
+                        icon = CupertinoIcons.exclamationmark_circle_fill;
+                        label = 'Mittel';
+                        break;
+                      case UrgencyLevel.high:
+                        backgroundColor = isSelected 
+                            ? CupertinoColors.systemRed.withOpacity(0.2)
+                            : CupertinoColors.systemBackground;
+                        textColor = isSelected 
+                            ? CupertinoColors.systemRed
+                            : CupertinoColors.systemGrey;
+                        icon = CupertinoIcons.exclamationmark_triangle_fill;
+                        label = 'Hoch';
+                        break;
+                    }
+                    
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => _updateUrgencyLevel(level),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: backgroundColor,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, color: textColor, size: 32),
+                              const SizedBox(height: 8),
+                              Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                  color: textColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
-              Expanded(
-                child: CupertinoSlider(
-                  value: _ratingValue,
-                  min: 0.0,
-                  max: 5.0,
-                  divisions: 5,
-                  onChanged: (value) {
-                    setState(() {
-                      _ratingValue = value;
-                    });
-                  },
+              if (_selectedUrgencyLevel == null && _formWasSubmitted)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8.0, left: 4.0),
+                  child: Text(
+                    'Bitte wählen Sie eine Dringlichkeitsstufe',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: CupertinoColors.systemRed,
+                    ),
+                  ),
                 ),
-              ),
-              const Text(
-                '5',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: CupertinoColors.systemGrey,
+              if (_selectedUrgencyLevel != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _getUrgencyColor(_selectedUrgencyLevel!).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _getUrgencyColor(_selectedUrgencyLevel!).withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _selectedUrgencyLevel!.description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _getUrgencyColor(_selectedUrgencyLevel!),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
             ],
-          ),
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 8.0, 0, 16.0),
-            child: Text(
-              '${_ratingValue.toInt()} Sterne',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: CupertinoColors.activeBlue,
-              ),
-            ),
           ),
         ),
       ],
@@ -900,22 +1088,42 @@ class TroubleReportFormState extends State<TroubleReportForm> {
   // Helfer-Methode zum Erstellen eines Segments in der Dringlichkeitsauswahl
   Widget _buildUrgencySegment(String text, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: color.withOpacity(0.9),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  // Hilfsmethod zur Bestimmung der Farbe für eine Dringlichkeitsstufe
+  Color _getUrgencyColor(UrgencyLevel level) {
+    switch (level) {
+      case UrgencyLevel.high:
+        return CupertinoColors.systemRed;
+      case UrgencyLevel.medium:
+        return CupertinoColors.systemOrange;
+      case UrgencyLevel.low:
+        return CupertinoColors.systemGreen;
+    }
   }
 
   // Methode zum Anzeigen des Cupertino Pickers für die Art des Anliegens
@@ -1159,11 +1367,42 @@ class TroubleReportFormState extends State<TroubleReportForm> {
 
   // Bild in Vollansicht anzeigen (Cupertino-Stil)
   void _showCupertinoImage(int index) {
+    // Fokus entfernen, um Fokus-Sprünge zu vermeiden
+    final currentFocus = FocusScope.of(context).focusedChild;
+    FocusScope.of(context).unfocus();
+    
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
           middle: const Text('Bildvorschau'),
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(CupertinoIcons.delete, color: CupertinoColors.destructiveRed),
+                SizedBox(width: 4),
+                Text('Löschen', style: TextStyle(color: CupertinoColors.destructiveRed)),
+              ],
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              // Verzögerung hinzufügen, um sicherzustellen, dass der Dialog geschlossen ist
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (mounted) {
+                  _removeImage(index);
+                  
+                  // Fokus wiederherstellen, um unerwünschte Fokus-Sprünge zu vermeiden
+                  if (currentFocus != null && mounted) {
+                    Future.delayed(const Duration(milliseconds: 50), () {
+                      FocusScope.of(context).requestFocus(currentFocus);
+                    });
+                  }
+                }
+              });
+            },
+          ),
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
             child: const Text('Fertig'),
@@ -1253,11 +1492,12 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               controller: _phoneController,
               focusNode: _phoneFocus,
               decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Telefon (optional)',
+                labelText: 'Telefon *',
               ),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (_) => _addressFocus.requestFocus(),
               keyboardType: TextInputType.phone,
+              validator: (value) => Validators.validateRequired(value, 'Telefonnummer'),
             ),
             const SizedBox(height: AppConstants.defaultPadding),
             TextFormField(
@@ -1304,6 +1544,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               focusNode: _deviceModelFocus,
               decoration: AppTheme.inputDecoration.copyWith(
                 labelText: 'Gerätemodell',
+                hintText: 'z.B. Vitodens 200-W',
               ),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (_) => _manufacturerFocus.requestFocus(),
@@ -1314,6 +1555,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               focusNode: _manufacturerFocus,
               decoration: AppTheme.inputDecoration.copyWith(
                 labelText: 'Hersteller',
+                hintText: 'z.B. Viessmann',
               ),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (_) => _serialNumberFocus.requestFocus(),
@@ -1344,11 +1586,11 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               focusNode: _serviceHistoryFocus,
               decoration: AppTheme.inputDecoration.copyWith(
                 labelText: 'Servicehistorie',
-                hintText: 'Letzte Wartungen oder Reparaturen',
+                hintText: 'Letzte Wartungen oder Reparaturen (Datum und Art der Maßnahme)',
               ),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (_) => _descriptionFocus.requestFocus(),
-              maxLines: 2,
+              maxLines: 3,
             ),
             const SizedBox(height: AppConstants.defaultPadding),
             InkWell(
@@ -1387,23 +1629,21 @@ class TroubleReportFormState extends State<TroubleReportForm> {
               controller: _descriptionController,
               focusNode: _descriptionFocus,
               decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Beschreibung *',
-                alignLabelWithHint: true,
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _alternativeContactFocus.requestFocus(),
-              maxLines: 5,
-              validator: (value) => Validators.validateRequired(value, 'Beschreibung'),
-            ),
-            const SizedBox(height: AppConstants.defaultPadding),
-            TextFormField(
-              controller: _alternativeContactController,
-              focusNode: _alternativeContactFocus,
-              decoration: AppTheme.inputDecoration.copyWith(
-                labelText: 'Alternative Kontaktmöglichkeit',
-                hintText: 'z.B. alternative E-Mail oder Telefonnummer',
+                labelText: 'Problembeschreibung',
+                hintText: 'Detaillierte Beschreibung des Problems (Fehlercodes, Symptome, Zeitpunkt des Auftretens)',
+                errorStyle: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                ),
               ),
               textInputAction: TextInputAction.done,
+              maxLines: 5,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Bitte geben Sie eine Problembeschreibung ein';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: AppConstants.defaultPadding),
             OutlinedButton.icon(
@@ -1458,7 +1698,7 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: _buildSectionHeader(
-              'Art des Anliegens',
+              'Art des Anliegens *',
               'Wählen Sie die passende Kategorie',
             ),
           ),
@@ -1550,104 +1790,118 @@ class TroubleReportFormState extends State<TroubleReportForm> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: _buildSectionHeader(
-              'Dringlichkeit',
+              'Dringlichkeit *',
               'Wie dringend benötigen Sie Unterstützung?',
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-            child: Column(
-              children: UrgencyLevel.values.map((level) {
-                final isSelected = _selectedUrgencyLevel == level;
-                // Farbkodierung basierend auf Dringlichkeitsstufe
-                Color urgencyColor;
-                switch (level) {
-                  case UrgencyLevel.high:
-                    urgencyColor = Colors.redAccent;
-                    break;
-                  case UrgencyLevel.medium:
-                    urgencyColor = Colors.orangeAccent;
-                    break;
-                  case UrgencyLevel.low:
-                    urgencyColor = Colors.greenAccent;
-                    break;
-                }
-                
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    decoration: BoxDecoration(
-                      color: isSelected ? urgencyColor.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? urgencyColor : Colors.grey.withOpacity(0.3),
-                        width: isSelected ? 2 : 1,
-                      ),
-                      boxShadow: isSelected
-                        ? [BoxShadow(color: urgencyColor.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))]
-                        : [],
-                    ),
-                    child: InkWell(
-                      onTap: () => _updateUrgencyLevel(level),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isSelected ? urgencyColor : Colors.transparent,
-                                border: Border.all(
-                                  color: isSelected ? urgencyColor : Colors.grey,
-                                  width: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.grey.shade200,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: UrgencyLevel.values.map((level) {
+                  final isSelected = _selectedUrgencyLevel == level;
+                  // Farbkodierung basierend auf Dringlichkeitsstufe
+                  Color urgencyColor;
+                  IconData urgencyIcon;
+                  switch (level) {
+                    case UrgencyLevel.high:
+                      urgencyColor = Colors.redAccent;
+                      urgencyIcon = Icons.warning_rounded;
+                      break;
+                    case UrgencyLevel.medium:
+                      urgencyColor = Colors.orangeAccent;
+                      urgencyIcon = Icons.error_outline_rounded;
+                      break;
+                    case UrgencyLevel.low:
+                      urgencyColor = Colors.greenAccent;
+                      urgencyIcon = Icons.check_circle_outline_rounded;
+                      break;
+                  }
+                  
+                  return Expanded(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _updateUrgencyLevel(level),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? urgencyColor.withOpacity(0.1) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                urgencyIcon,
+                                color: urgencyColor,
+                                size: 32,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                level.label,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected ? urgencyColor : Colors.black87,
                                 ),
                               ),
-                              child: isSelected
-                                ? const Icon(Icons.check, size: 16, color: Colors.white)
-                                : null,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    level.label,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      color: isSelected ? urgencyColor : Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    level.description,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ),
+          if (_selectedUrgencyLevel != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _getUrgencyColorMaterial(_selectedUrgencyLevel!).withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _getUrgencyColorMaterial(_selectedUrgencyLevel!).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  _selectedUrgencyLevel!.description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _getUrgencyColorMaterial(_selectedUrgencyLevel!),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  // Hilfsmethode zur Bestimmung der Farbe für Material-Design
+  Color _getUrgencyColorMaterial(UrgencyLevel level) {
+    switch (level) {
+      case UrgencyLevel.high:
+        return Colors.redAccent;
+      case UrgencyLevel.medium:
+        return Colors.orangeAccent;
+      case UrgencyLevel.low:
+        return Colors.greenAccent;
+    }
   }
 
   // Material-Version des DatePickers
@@ -1730,57 +1984,6 @@ class TroubleReportFormState extends State<TroubleReportForm> {
     );
   }
 
-  // Material-Dialog für Bildvorschau
-  void _showImage(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Stack(
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InteractiveViewer(
-                  child: Image.file(_images[index]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => _removeImage(index),
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        label: const Text('Löschen', style: TextStyle(color: Colors.red)),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                        label: const Text('Schließen'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black.withAlpha(128),
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // Methode zum Anzeigen der Bildauswahloptionen (Material Design für Android)
   void _showImagePickerOptions() {
     showModalBottomSheet(
@@ -1833,6 +2036,380 @@ class TroubleReportFormState extends State<TroubleReportForm> {
             ),
             const SizedBox(height: 8),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Material-Dialog für Bildvorschau
+  void _showImage(int index) {
+    // Fokus entfernen, um Fokus-Sprünge zu vermeiden
+    final currentFocus = FocusScope.of(context).focusedChild;
+    FocusScope.of(context).unfocus();
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Stack(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InteractiveViewer(
+                  child: Image.file(_images[index]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          // Verzögerung hinzufügen, um sicherzustellen, dass der Dialog geschlossen ist
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            if (mounted) {
+                              _removeImage(index);
+                              
+                              // Fokus wiederherstellen, um unerwünschte Fokus-Sprünge zu vermeiden
+                              if (currentFocus != null && mounted) {
+                                Future.delayed(const Duration(milliseconds: 50), () {
+                                  FocusScope.of(context).requestFocus(currentFocus);
+                                });
+                              }
+                            }
+                          });
+                        },
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        label: const Text('Löschen', style: TextStyle(color: Colors.red)),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          // Fokus wiederherstellen, um unerwünschte Fokus-Sprünge zu vermeiden
+                          if (currentFocus != null && mounted) {
+                            Future.delayed(const Duration(milliseconds: 50), () {
+                              FocusScope.of(context).requestFocus(currentFocus);
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.close),
+                        label: const Text('Schließen'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: IconButton(
+                onPressed: () => {
+                  Navigator.pop(context),
+                  // Fokus wiederherstellen, um unerwünschte Fokus-Sprünge zu vermeiden
+                  if (currentFocus != null && mounted) {
+                    Future.delayed(const Duration(milliseconds: 50), () {
+                      FocusScope.of(context).requestFocus(currentFocus);
+                    })
+                  }
+                },
+                icon: const Icon(Icons.close),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withAlpha(128),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Schaltfläche zum Absenden für Material Design (Android)
+  Widget _buildMaterialSubmitButton() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withAlpha(51)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: _isLoading
+                ? LinearGradient(
+                    colors: [
+                      Theme.of(context).primaryColor.withOpacity(0.7),
+                      Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  )
+                : LinearGradient(
+                    colors: [
+                      Theme.of(context).primaryColor,
+                      Theme.of(context).colorScheme.primary,
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).primaryColor.withOpacity(0.25),
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _handleLocalSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              disabledBackgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              shadowColor: Colors.transparent,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              minimumSize: const Size(double.infinity, 54),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            child: _isLoading
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Text('Wird gesendet...'),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.send, size: 22),
+                      SizedBox(width: 12),
+                      Text('Serviceanfrage absenden'),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Lokale Methode zum Handling des Absenden-Buttons
+  void _handleLocalSubmit() {
+    setState(() => _formWasSubmitted = true);
+    
+    // Prüfen, ob alle erforderlichen Felder ausgefüllt sind
+    final FormState? formState = Form.of(context);
+    if (formState != null && !formState.validate()) {
+      // Zeige eine Fehlermeldung an
+      _showValidationErrorSnackbar(context);
+      return;
+    }
+    
+    // Überprüfe Dringlichkeitsstufe
+    if (_selectedUrgencyLevel == null) {
+      _showUrgencyLevelErrorSnackbar(context);
+      return;
+    }
+    
+    // Überprüfe Art des Anliegens
+    if (_selectedType == null) {
+      _showRequestTypeErrorSnackbar(context);
+      return;
+    }
+    
+    // Wenn alle Validierungen erfolgreich sind, rufe die onSubmit-Funktion auf
+    if (widget.onSubmit != null) {
+      widget.onSubmit!();
+    }
+  }
+
+  // Hilfsmethode, um eine Fehlermeldung für die Dringlichkeitsstufe anzuzeigen
+  void _showUrgencyLevelErrorSnackbar(BuildContext context) {
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Dringlichkeit auswählen'),
+          content: const Text('Bitte wählen Sie eine Dringlichkeitsstufe aus.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitte wählen Sie eine Dringlichkeitsstufe aus.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // Hilfsmethode, um eine Fehlermeldung für die Art des Anliegens anzuzeigen
+  void _showRequestTypeErrorSnackbar(BuildContext context) {
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Art des Anliegens auswählen'),
+          content: const Text('Bitte wählen Sie eine Art des Anliegens aus.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitte wählen Sie eine Art des Anliegens aus.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // Hilfsmethode, um eine Fehlermeldung anzuzeigen
+  void _showValidationErrorSnackbar(BuildContext context) {
+    // Je nach Plattform unterschiedliche Fehlermeldungen anzeigen
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Formularfehler'),
+          content: const Text('Bitte füllen Sie alle Pflichtfelder korrekt aus, bevor Sie die Serviceanfrage absenden.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitte füllen Sie alle Pflichtfelder korrekt aus.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // Schaltfläche zum Absenden für Cupertino (iOS)
+  Widget _buildCupertinoSubmitButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: CupertinoColors.systemGrey4.withOpacity(0.3),
+              blurRadius: 10,
+              spreadRadius: 1,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: _isLoading
+                    ? LinearGradient(
+                        colors: [
+                          CupertinoColors.systemBlue.withOpacity(0.7),
+                          CupertinoColors.activeBlue.withOpacity(0.7),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      )
+                    : LinearGradient(
+                        colors: [
+                          CupertinoColors.systemBlue,
+                          CupertinoColors.activeBlue,
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: CupertinoButton(
+                onPressed: _isLoading ? null : _handleLocalSubmit,
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.transparent,
+                child: _isLoading
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CupertinoActivityIndicator(color: CupertinoColors.white),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Wird gesendet...',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(CupertinoIcons.paperplane_fill, color: CupertinoColors.white, size: 22),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Serviceanfrage absenden',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
         ),
       ),
     );

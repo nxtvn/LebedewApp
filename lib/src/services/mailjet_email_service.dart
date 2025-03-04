@@ -89,7 +89,6 @@ class MailjetEmailService implements EmailService {
         <p><strong>E-Mail:</strong> ${form.email}</p>
         ${form.phone != null ? '<p><strong>Telefon:</strong> ${form.phone}</p>' : ''}
         ${form.address != null ? '<p><strong>Adresse:</strong> ${form.address}</p>' : ''}
-        ${form.alternativeContact != null ? '<p><strong>Alternative Kontaktmöglichkeit:</strong> ${form.alternativeContact}</p>' : ''}
         
         <h3>Gerätedaten</h3>
         ${form.deviceModel != null ? '<p><strong>Gerätemodell:</strong> ${form.deviceModel}</p>' : ''}
@@ -131,7 +130,6 @@ class MailjetEmailService implements EmailService {
           <p><strong>E-Mail:</strong> ${form.email}</p>
           ${form.phone != null ? '<p><strong>Telefon:</strong> ${form.phone}</p>' : ''}
           ${form.address != null ? '<p><strong>Adresse:</strong> ${form.address}</p>' : ''}
-          ${form.alternativeContact != null ? '<p><strong>Alternative Kontaktmöglichkeit:</strong> ${form.alternativeContact}</p>' : ''}
           
           <h4 style="color: #1976D2; margin-top: 15px;">Geräteinformationen</h4>
           ${form.deviceModel != null ? '<p><strong>Gerätemodell:</strong> ${form.deviceModel}</p>' : ''}
@@ -163,7 +161,6 @@ class MailjetEmailService implements EmailService {
         E-Mail: ${form.email}
         ${form.phone != null ? 'Telefon: ${form.phone}\n' : ''}
         ${form.address != null ? 'Adresse: ${form.address}\n' : ''}
-        ${form.alternativeContact != null ? 'Alternative Kontaktmöglichkeit: ${form.alternativeContact}\n' : ''}
         
         Gerätedaten:
         ${form.deviceModel != null ? 'Gerätemodell: ${form.deviceModel}\n' : ''}
@@ -203,7 +200,6 @@ class MailjetEmailService implements EmailService {
         E-Mail: ${form.email}
         ${form.phone != null ? 'Telefon: ${form.phone}\n' : ''}
         ${form.address != null ? 'Adresse: ${form.address}\n' : ''}
-        ${form.alternativeContact != null ? 'Alternative Kontaktmöglichkeit: ${form.alternativeContact}\n' : ''}
 
         Geräteinformationen:
         ${form.deviceModel != null ? 'Gerätemodell: ${form.deviceModel}\n' : ''}

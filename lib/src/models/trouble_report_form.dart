@@ -20,7 +20,6 @@ class TroubleReportForm {
   String? serviceHistory;
   String? previousIssues;
   UrgencyLevel? urgencyLevel;
-  String? alternativeContact;
 
   TroubleReportForm({
     this.name,
@@ -40,7 +39,6 @@ class TroubleReportForm {
     this.serviceHistory,
     this.previousIssues,
     this.urgencyLevel,
-    this.alternativeContact,
   }) : 
     images = images ?? [],
     energySources = energySources ?? {};
