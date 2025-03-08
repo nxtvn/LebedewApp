@@ -7,51 +7,122 @@ class AppTheme extends ChangeNotifier {
       brightness: Brightness.light,
     ),
     useMaterial3: true,
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
+    inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      contentPadding: EdgeInsets.all(16),
-      fillColor: Color(0xFFFAFAFA),
+      fillColor: const Color(0xFFF5F5F5),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.blue, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
+      ),
+      contentPadding: const EdgeInsets.all(16),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+      style: ButtonStyle(
+        elevation: MaterialStateProperty.all(0),
+        padding: MaterialStateProperty.all(
+          const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
         ),
+        shape: MaterialStateProperty.all(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        backgroundColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return Colors.grey[300];
+          }
+          return Colors.blue;
+        }),
+        foregroundColor: MaterialStateProperty.all(Colors.white),
       ),
     ),
     cardTheme: CardTheme(
-      elevation: 0,
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.15),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.withAlpha(51),
-        ),
+        borderRadius: BorderRadius.circular(16),
       ),
+      clipBehavior: Clip.antiAlias,
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: Colors.blue,
       foregroundColor: Colors.white,
-      extendedPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 2,
+    ),
+    appBarTheme: const AppBarTheme(
+      centerTitle: false,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      foregroundColor: Colors.black,
+    ),
+    chipTheme: ChipThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+    dropdownMenuTheme: DropdownMenuThemeData(
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFF5F5F5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
     ),
   );
 
   static InputDecoration get inputDecoration => InputDecoration(
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-    ),
     filled: true,
-    fillColor: const Color(0xFFFAFAFA),
+    fillColor: const Color(0xFFF5F5F5),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Colors.blue, width: 2),
+    ),
     contentPadding: const EdgeInsets.all(16),
   );
 
-  static ButtonStyle get primaryButtonStyle => ElevatedButton.styleFrom(
-    minimumSize: const Size.fromHeight(48),
-    padding: const EdgeInsets.all(16),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
+  static ButtonStyle get primaryButtonStyle => ButtonStyle(
+    elevation: MaterialStateProperty.all(0),
+    padding: MaterialStateProperty.all(
+      const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
     ),
+    minimumSize: MaterialStateProperty.all(const Size.fromHeight(56)),
+    shape: MaterialStateProperty.all(
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+    backgroundColor: MaterialStateProperty.resolveWith((states) {
+      if (states.contains(MaterialState.disabled)) {
+        return Colors.grey[300];
+      }
+      return Colors.blue;
+    }),
+    foregroundColor: MaterialStateProperty.all(Colors.white),
   );
 
   bool _isDarkMode = false;

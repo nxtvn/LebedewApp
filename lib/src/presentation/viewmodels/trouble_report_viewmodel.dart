@@ -160,6 +160,13 @@ class TroubleReportViewModel extends ChangeNotifier {
     }
   }
 
+  void setLoading(bool value) {
+    if (_isLoading != value) {
+      _isLoading = value;
+      notifyListeners();
+    }
+  }
+
   Future<bool> submitReport() async {
     _isLoading = true;
     notifyListeners();

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 
+/// HomePage Widget zur plattformspezifischen Darstellung der Hauptseite
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -38,31 +41,38 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lebedew App'),
-        elevation: 2,
+    return Platform.isIOS ? _buildCupertinoHomePage() : _buildMaterialHomePage();
+  }
+
+  /// Cupertino HomePage für iOS
+  Widget _buildCupertinoHomePage() {
+    return CupertinoTabScaffold(
+      tabBar: CupertinoTabBar(
+        items: const [
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.home), label: 'Start'),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.search), label: 'Suche'),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.person), label: 'Profil'),
+        ],
       ),
+      tabBuilder: (context, index) => CupertinoTabView(builder: (context) => _pages[index]),
+    );
+  }
+
+  /// Material HomePage für Android
+  Widget _buildMaterialHomePage() {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Lebedew App')),
       body: FadeTransition(
-        opacity: _animation,
+        opacity: _controller,
         child: _pages[_selectedIndex],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Start',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.search),
-            label: 'Suche',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
+          NavigationDestination(icon: Icon(Icons.home), label: 'Start'),
+          NavigationDestination(icon: Icon(Icons.search), label: 'Suche'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );
