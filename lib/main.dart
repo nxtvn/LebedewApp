@@ -3,10 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'dart:io';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'src/core/theme/app_theme.dart';
-import 'src/core/constants/app_constants.dart';
-import 'src/di/injection.dart';
-import 'src/presentation/screens/login_screen.dart';
+import 'core/theme/app_theme.dart';
+import 'core/constants/app_constants.dart';
+import 'core/config/injection.dart';
+import 'presentation/screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
