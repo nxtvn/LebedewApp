@@ -4,28 +4,157 @@ import '../../domain/repositories/trouble_report_repository.dart';
 import '../../domain/entities/trouble_report.dart';
 import '../../domain/services/email_service.dart';
 import '../../domain/services/image_storage_service.dart';
+import '../../core/utils/image_utils.dart';
+import 'package:intl/intl.dart';
 
 class TroubleReportRepositoryImpl implements TroubleReportRepository {
   final EmailService _emailService;
-  final ImageStorageService _imageStorage;
+  final ImageStorageService _imageStorageService;
+  final DateFormat _dateFormatter = DateFormat('dd.MM.yyyy');
 
-  TroubleReportRepositoryImpl(this._emailService, this._imageStorage);
+  TroubleReportRepositoryImpl(this._emailService, this._imageStorageService);
 
   @override
   Future<bool> submitReport(TroubleReport report, List<File> images) async {
     try {
-      return await _emailService.sendTroubleReport(
-        form: report,
-        images: images,
+      // Optimiere Bilder
+      final optimizedImages = <File>[];
+      for (final image in images) {
+        try {
+          final optimizedImage = await ImageUtils.optimizeImage(image);
+          optimizedImages.add(optimizedImage);
+        } catch (e) {
+          // Bei Fehler das Original verwenden
+          optimizedImages.add(image);
+          debugPrint('Fehler bei der Bildoptimierung: $e');
+        }
+      }
+
+      // Speichere optimierte Bilder
+      final imagePaths = <String>[];
+      for (final image in optimizedImages) {
+        final path = await _imageStorageService.saveImage(image);
+        imagePaths.add(path);
+      }
+
+      // Erstelle E-Mail-Inhalt
+      final emailBody = _createEmailBody(report);
+      
+      // Sende E-Mail mit Anhängen
+      return await _emailService.sendEmail(
+        subject: 'Störungsmeldung: ${report.type.label}',
+        body: emailBody,
+        toEmail: report.email,
+        attachmentPaths: imagePaths,
       );
     } catch (e) {
-      debugPrint('Error submitting report: $e');
+      debugPrint('Fehler beim Senden der Störungsmeldung: $e');
       return false;
     }
   }
 
   @override
   Future<String> saveImage(File image) async {
-    return await _imageStorage.saveImage(image);
+    return await _imageStorageService.saveImage(image);
+  }
+
+  @override
+  Future<bool> submitTroubleReport(TroubleReport report) async {
+    try {
+      // Optimiere Bilder
+      final optimizedImages = <File>[];
+      for (final image in report.images) {
+        try {
+          final optimizedImage = await ImageUtils.optimizeImage(image);
+          optimizedImages.add(optimizedImage);
+        } catch (e) {
+          // Bei Fehler das Original verwenden
+          optimizedImages.add(image);
+          debugPrint('Fehler bei der Bildoptimierung: $e');
+        }
+      }
+
+      // Speichere optimierte Bilder
+      final imagePaths = <String>[];
+      for (final image in optimizedImages) {
+        final path = await _imageStorageService.saveImage(image);
+        imagePaths.add(path);
+      }
+
+      // Erstelle E-Mail-Inhalt
+      final emailBody = _createEmailBody(report);
+      
+      // Sende E-Mail mit Anhängen
+      return await _emailService.sendEmail(
+        subject: 'Störungsmeldung: ${report.type.label}',
+        body: emailBody,
+        toEmail: report.email,
+        attachmentPaths: imagePaths,
+      );
+    } catch (e) {
+      debugPrint('Fehler beim Senden der Störungsmeldung: $e');
+      return false;
+    }
+  }
+
+  String _createEmailBody(TroubleReport report) {
+    final buffer = StringBuffer();
+    
+    buffer.writeln('<h2>Neue Störungsmeldung</h2>');
+    buffer.writeln('<p><strong>Art des Anliegens:</strong> ${report.type.label}</p>');
+    buffer.writeln('<p><strong>Dringlichkeit:</strong> ${report.urgencyLevel.label}</p>');
+    
+    buffer.writeln('<h3>Kontaktdaten</h3>');
+    buffer.writeln('<p><strong>Name:</strong> ${report.name}</p>');
+    buffer.writeln('<p><strong>E-Mail:</strong> ${report.email}</p>');
+    
+    if (report.phone != null && report.phone!.isNotEmpty) {
+      buffer.writeln('<p><strong>Telefon:</strong> ${report.phone}</p>');
+    }
+    
+    if (report.address != null && report.address!.isNotEmpty) {
+      buffer.writeln('<p><strong>Adresse:</strong> ${report.address}</p>');
+    }
+    
+    buffer.writeln('<h3>Gerätedaten</h3>');
+    
+    if (report.deviceModel != null && report.deviceModel!.isNotEmpty) {
+      buffer.writeln('<p><strong>Gerätemodell:</strong> ${report.deviceModel}</p>');
+    }
+    
+    if (report.manufacturer != null && report.manufacturer!.isNotEmpty) {
+      buffer.writeln('<p><strong>Hersteller:</strong> ${report.manufacturer}</p>');
+    }
+    
+    if (report.serialNumber != null && report.serialNumber!.isNotEmpty) {
+      buffer.writeln('<p><strong>Seriennummer:</strong> ${report.serialNumber}</p>');
+    }
+    
+    if (report.errorCode != null && report.errorCode!.isNotEmpty) {
+      buffer.writeln('<p><strong>Fehlercode:</strong> ${report.errorCode}</p>');
+    }
+    
+    if (report.occurrenceDate != null) {
+      buffer.writeln('<p><strong>Datum des Vorfalls:</strong> ${_dateFormatter.format(report.occurrenceDate!)}</p>');
+    }
+    
+    if (report.serviceHistory != null && report.serviceHistory!.isNotEmpty) {
+      buffer.writeln('<p><strong>Servicehistorie:</strong> ${report.serviceHistory}</p>');
+    }
+    
+    buffer.writeln('<h3>Problembeschreibung</h3>');
+    buffer.writeln('<p>${report.description}</p>');
+    
+    if (report.energySources.isNotEmpty) {
+      buffer.writeln('<p><strong>Energiequellen:</strong> ${report.energySources.join(', ')}</p>');
+    }
+    
+    buffer.writeln('<p><strong>Wartungsvertrag:</strong> ${report.hasMaintenanceContract ? 'Ja' : 'Nein'}</p>');
+    
+    if (report.imagesPaths.isNotEmpty) {
+      buffer.writeln('<p><strong>Anzahl der Bilder:</strong> ${report.imagesPaths.length}</p>');
+    }
+    
+    return buffer.toString();
   }
 } 

@@ -1,7 +1,10 @@
 enum RequestType {
-  trouble('Störung'),
-  customerService('Kundendienst');
+  trouble(label: 'Störungsmeldung'),
+  maintenance(label: 'Wartungsanfrage'),
+  installation(label: 'Installationsanfrage'),
+  consultation(label: 'Beratungsanfrage'),
+  other(label: 'Sonstiges');
 
   final String label;
-  const RequestType(this.label);
+  const RequestType({required this.label});
 } 

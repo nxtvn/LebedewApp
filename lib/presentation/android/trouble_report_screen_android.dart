@@ -1,114 +1,84 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
-import 'trouble_report_form_android.dart';
-import '../../domain/entities/trouble_report.dart';
-import '../common/viewmodels/trouble_report_viewmodel.dart';
+import 'package:provider/provider.dart';
+import '../../presentation/common/viewmodels/trouble_report_viewmodel.dart';
+import '../../presentation/common/widgets/trouble_report_form.dart';
 
-class TroubleReportScreen extends StatelessWidget {
-  const TroubleReportScreen({super.key});
+class TroubleReportScreenAndroid extends StatelessWidget {
+  const TroubleReportScreenAndroid({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<TroubleReportViewModel>(
       create: (context) => GetIt.I<TroubleReportViewModel>(),
-      child: const TroubleReportView(),
+      child: const _TroubleReportView(),
     );
   }
 }
 
-class TroubleReportView extends StatefulWidget {
-  const TroubleReportView({super.key});
+class _TroubleReportView extends StatefulWidget {
+  const _TroubleReportView();
 
   @override
-  State<TroubleReportView> createState() => _TroubleReportViewState();
+  State<_TroubleReportView> createState() => _TroubleReportViewState();
 }
 
-class _TroubleReportViewState extends State<TroubleReportView> {
-  final _formKey = GlobalKey<FormState>();
-  late TroubleReportViewModel _viewModel;
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _viewModel = context.read<TroubleReportViewModel>();
-  }
-
-  Future<void> _handleSubmit(TroubleReport troubleReport) async {
-    if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
-      try {
-        final success = await _viewModel.submitReport(troubleReport);
-        if (success && mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => AlertDialog(
-              title: const Text('Störungsmeldung erfolgreich gesendet'),
-              content: const Text(
-                'Vielen Dank für Ihre Meldung. Wir haben Ihre Störungsmeldung erhalten und werden uns zeitnah mit Ihnen in Verbindung setzen.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _formKey.currentState?.reset();
-                    _viewModel.reset();
-                  },
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fehler beim Senden der Störungsmeldung. Bitte versuchen Sie es später erneut.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
-    }
-  }
-
+class _TroubleReportViewState extends State<_TroubleReportView> {
   @override
   Widget build(BuildContext context) {
-    final viewModel = context.watch<TroubleReportViewModel>();
-
+    final viewModel = Provider.of<TroubleReportViewModel>(context);
+    
     return Scaffold(
-      appBar: AppBar(title: const Text('Störungsmeldung')),
-      body: Stack(
-        children: [
-          TroubleReportFormAndroid(
-            formKey: _formKey,
-            onSubmit: _handleSubmit,
-          ),
-          if (viewModel.isLoading)
-            Container(
-              color: Colors.black26,
-              child: const Center(
-                child: Card(
-                  child: Padding(
+      appBar: AppBar(
+        title: const Text('Störungsmeldung'),
+        backgroundColor: Colors.blue,
+      ),
+      body: SafeArea(
+        child: viewModel.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : viewModel.hasError
+                ? _buildErrorView(viewModel.errorMessage)
+                : const SingleChildScrollView(
                     padding: EdgeInsets.all(16.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Störungsmeldung wird gesendet...'),
-                      ],
-                    ),
+                    child: TroubleReportForm(),
                   ),
-                ),
-              ),
+      ),
+    );
+  }
+
+  Widget _buildErrorView(String errorMessage) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
             ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              'Ein Fehler ist aufgetreten',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                Provider.of<TroubleReportViewModel>(context, listen: false).reset();
+              },
+              child: const Text('Erneut versuchen'),
+            ),
+          ],
+        ),
       ),
     );
   }

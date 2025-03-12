@@ -8,6 +8,7 @@ import '../domain/services/email_service.dart';
 import '../core/config/env.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Implementierung des E-Mail-Services mit Mailjet
 class MailjetEmailService implements EmailService {
@@ -27,13 +28,11 @@ class MailjetEmailService implements EmailService {
         _secretKey = secretKey,
         _toEmail = toEmail,
         _queueService = queueService {
-    // Queue beim Start initialisieren und verarbeiten
-    _initializeQueue();
-  }
-
-  Future<void> _initializeQueue() async {
-    await _queueService.initialize();
-    _processQueue();
+    // Lade die E-Mail-Warteschlange beim Start
+    _queueService.loadQueue().then((_) {
+      // Versuche, ausstehende E-Mails zu senden
+      _processQueue();
+    });
   }
 
   Future<void> _processQueue() async {
@@ -308,6 +307,128 @@ class MailjetEmailService implements EmailService {
         images.map((file) => file.path).toList(),
       );
       return false;
+    }
+  }
+
+  @override
+  Future<bool> sendEmail({
+    required String subject,
+    required String body,
+    required String toEmail,
+    String? fromEmail,
+    String? fromName,
+    List<String>? attachmentPaths,
+  }) async {
+    try {
+      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $auth',
+      };
+
+      final Map<String, dynamic> emailData = {
+        'Messages': [
+          {
+            'From': {
+              'Email': fromEmail ?? 'service@lebedew.de',
+              'Name': fromName ?? 'Lebedew Service',
+            },
+            'To': [
+              {
+                'Email': toEmail,
+                'Name': '',
+              }
+            ],
+            'Subject': subject,
+            'HTMLPart': body,
+          }
+        ]
+      };
+
+      // Füge Anhänge hinzu, falls vorhanden
+      if (attachmentPaths != null && attachmentPaths.isNotEmpty) {
+        final attachments = <Map<String, dynamic>>[];
+        
+        for (final path in attachmentPaths) {
+          try {
+            final file = File(path);
+            if (await file.exists()) {
+              final bytes = await file.readAsBytes();
+              final filename = path.split('/').last;
+              final contentType = _getContentType(filename);
+              
+              attachments.add({
+                'ContentType': contentType,
+                'Filename': filename,
+                'Base64Content': base64Encode(bytes),
+              });
+            }
+          } catch (e) {
+            debugPrint('Error adding attachment: $e');
+          }
+        }
+        
+        if (attachments.isNotEmpty) {
+          emailData['Messages'][0]['Attachments'] = attachments;
+        }
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send'),
+        headers: headers,
+        body: jsonEncode(emailData),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        debugPrint('Failed to send email: ${response.body}');
+        
+        // Bei Fehler zur Warteschlange hinzufügen
+        await _queueService.addToQueue(
+          EmailQueueItem(
+            subject: subject,
+            body: body,
+            toEmail: toEmail,
+            fromEmail: fromEmail,
+            fromName: fromName,
+            attachmentPaths: attachmentPaths,
+          ),
+        );
+        
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error sending email: $e');
+      
+      // Bei Ausnahme zur Warteschlange hinzufügen
+      await _queueService.addToQueue(
+        EmailQueueItem(
+          subject: subject,
+          body: body,
+          toEmail: toEmail,
+          fromEmail: fromEmail,
+          fromName: fromName,
+          attachmentPaths: attachmentPaths,
+        ),
+      );
+      
+      return false;
+    }
+  }
+
+  String _getContentType(String filename) {
+    final extension = filename.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'pdf':
+        return 'application/pdf';
+      default:
+        return 'application/octet-stream';
     }
   }
 } 

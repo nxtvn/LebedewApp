@@ -2,5 +2,7 @@ import 'dart:io';
 
 abstract class ImageStorageService {
   Future<String> saveImage(File image);
-  Future<void> deleteImage(String path);
+  Future<File?> getImage(String path);
+  Future<bool> deleteImage(String path);
+  Future<List<String>> getAllImagePaths();
 } 

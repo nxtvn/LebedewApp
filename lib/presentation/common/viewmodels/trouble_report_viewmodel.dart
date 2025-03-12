@@ -5,8 +5,11 @@ import '../../domain/enums/urgency_level.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import '../../../core/utils/image_utils.dart';
+import 'base_viewmodel.dart';
 
-class TroubleReportViewModel extends ChangeNotifier {
+class TroubleReportViewModel extends BaseViewModel {
   final TroubleReportRepository _repository;
   
   TroubleReportViewModel(this._repository);
@@ -272,5 +275,31 @@ class TroubleReportViewModel extends ChangeNotifier {
       _imagesPaths.removeAt(index);
       notifyListeners();
     }
+  }
+
+  Future<bool> submitReport(TroubleReport report) async {
+    return await runAsyncOperation<bool>(() async {
+      // Optimize images if available
+      if (report.images.isNotEmpty) {
+        final optimizedImages = <File>[];
+        
+        for (final image in report.images) {
+          try {
+            final optimizedImage = await ImageUtils.optimizeImage(image);
+            optimizedImages.add(optimizedImage);
+          } catch (e) {
+            // If optimization fails, use original image
+            optimizedImages.add(image);
+            debugPrint('Image optimization failed: $e');
+          }
+        }
+        
+        // Update report with optimized images
+        report = report.copyWith(images: optimizedImages);
+      }
+      
+      // Submit report to repository
+      return await _repository.submitTroubleReport(report);
+    }) ?? false;
   }
 } 

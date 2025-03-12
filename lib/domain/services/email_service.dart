@@ -13,4 +13,13 @@ abstract class EmailService {
     required TroubleReport form,
     required List<File> images,
   });
+
+  Future<bool> sendEmail({
+    required String subject,
+    required String body,
+    required String toEmail,
+    String? fromEmail,
+    String? fromName,
+    List<String>? attachmentPaths,
+  });
 } 

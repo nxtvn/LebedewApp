@@ -6,15 +6,18 @@ import 'package:get_it/get_it.dart';
 import '../presentation/viewmodels/trouble_report_viewmodel.dart';
 import '../presentation/widgets/trouble_report_form.dart';
 import '../core/constants/app_constants.dart';
+import '../../core/platform/platform_helper.dart';
+import '../android/trouble_report_screen_android.dart';
+import '../ios/trouble_report_screen_ios.dart';
 
 class TroubleReportScreen extends StatelessWidget {
-  const TroubleReportScreen({super.key});
+  const TroubleReportScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<TroubleReportViewModel>(
-      create: (context) => GetIt.I<TroubleReportViewModel>(),
-      child: const TroubleReportView(),
+    return PlatformHelper.platformWidget(
+      iosBuilder: () => const TroubleReportScreenIOS(),
+      androidBuilder: () => const TroubleReportScreenAndroid(),
     );
   }
 }

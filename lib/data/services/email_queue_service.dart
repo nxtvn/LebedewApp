@@ -1,8 +1,55 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import '../domain/entities/trouble_report.dart';
 import 'package:logging/logging.dart';
+
+class EmailQueueItem {
+  final String subject;
+  final String body;
+  final String toEmail;
+  final String? fromEmail;
+  final String? fromName;
+  final List<String>? attachmentPaths;
+  final DateTime createdAt;
+
+  EmailQueueItem({
+    required this.subject,
+    required this.body,
+    required this.toEmail,
+    this.fromEmail,
+    this.fromName,
+    this.attachmentPaths,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subject': subject,
+      'body': body,
+      'toEmail': toEmail,
+      'fromEmail': fromEmail,
+      'fromName': fromName,
+      'attachmentPaths': attachmentPaths,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory EmailQueueItem.fromJson(Map<String, dynamic> json) {
+    return EmailQueueItem(
+      subject: json['subject'],
+      body: json['body'],
+      toEmail: json['toEmail'],
+      fromEmail: json['fromEmail'],
+      fromName: json['fromName'],
+      attachmentPaths: json['attachmentPaths'] != null
+          ? List<String>.from(json['attachmentPaths'])
+          : null,
+      createdAt: DateTime.parse(json['createdAt']),
+    );
+  }
+}
 
 class QueuedEmail {
   final TroubleReport report;
