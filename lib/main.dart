@@ -30,23 +30,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (Platform.isIOS) {
-      return CupertinoApp(
+      return const CupertinoApp(
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
-        theme: const CupertinoThemeData(),
-        home: const LoginScreen(),
-        localizationsDelegates: const [
+        theme: CupertinoThemeData(),
+        home: LoginScreen(),
+        localizationsDelegates: [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [Locale('de', 'DE')],
+        supportedLocales: [Locale('de', 'DE')],
       );
     } else {
       return MaterialApp(
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme.copyWith(useMaterial3: true),
+        theme: AppTheme.lightTheme.copyWith(),
         home: const LoginScreen(),
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

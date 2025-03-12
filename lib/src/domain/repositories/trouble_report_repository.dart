@@ -6,7 +6,7 @@ abstract class TroubleReportRepository {
   /// 
   /// [report] enthält die Daten der Störungsmeldung
   /// [images] enthält die ausgewählten Bilder
-  Future<bool> submitReport(TroubleReport report, List<File> images);
+  Future<bool> submitReport(TroubleReport troubleReport);
 
   /// Speichert ein Bild temporär
   Future<String> saveImage(File image);

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
-import '../viewmodels/trouble_report_viewmodel.dart';
-import '../widgets/trouble_report_form.dart';
-import '../../core/constants/app_constants.dart';
+import 'trouble_report_form_android.dart';
+import '../../domain/entities/trouble_report.dart';
+import '../common/viewmodels/trouble_report_viewmodel.dart';
 
 class TroubleReportScreen extends StatelessWidget {
   const TroubleReportScreen({super.key});
@@ -26,7 +26,6 @@ class TroubleReportView extends StatefulWidget {
 
 class _TroubleReportViewState extends State<TroubleReportView> {
   final _formKey = GlobalKey<FormState>();
-  final _troubleReportFormKey = GlobalKey<TroubleReportFormState>();
   late TroubleReportViewModel _viewModel;
   bool _isLoading = false;
 
@@ -36,65 +35,36 @@ class _TroubleReportViewState extends State<TroubleReportView> {
     _viewModel = context.read<TroubleReportViewModel>();
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(TroubleReport troubleReport) async {
     if (_formKey.currentState?.validate() ?? false) {
-      if (_viewModel.type == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bitte wählen Sie eine Art des Anliegens aus'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
-      if (_viewModel.urgencyLevel == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bitte wählen Sie eine Dringlichkeitsstufe aus'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
       setState(() => _isLoading = true);
       try {
-        final success = await _viewModel.submitReport();
+        final success = await _viewModel.submitReport(troubleReport);
         if (success && mounted) {
           await showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => PopScope(
-              canPop: false,
-              child: AlertDialog(
-                title: const Text('Serviceanfrage erfolgreich gesendet'),
-                content: const Text(
-                  'Vielen Dank für Ihre Meldung. Wir haben Ihre Serviceanfrage erhalten und werden uns zeitnah mit Ihnen in Verbindung setzen.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _formKey.currentState?.reset();
-                      _viewModel.reset();
-                      if (_troubleReportFormKey.currentState != null) {
-                        _troubleReportFormKey.currentState!.reset();
-                      }
-                      setState(() {
-                        _isLoading = false;
-                      });
-                    },
-                    child: const Text('OK'),
-                  ),
-                ],
+            builder: (_) => AlertDialog(
+              title: const Text('Störungsmeldung erfolgreich gesendet'),
+              content: const Text(
+                'Vielen Dank für Ihre Meldung. Wir haben Ihre Störungsmeldung erhalten und werden uns zeitnah mit Ihnen in Verbindung setzen.',
               ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _formKey.currentState?.reset();
+                    _viewModel.reset();
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
             ),
           );
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Fehler beim Senden der Serviceanfrage. Bitte versuchen Sie es später erneut.'),
+              content: Text('Fehler beim Senden der Störungsmeldung. Bitte versuchen Sie es später erneut.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -112,11 +82,10 @@ class _TroubleReportViewState extends State<TroubleReportView> {
     final viewModel = context.watch<TroubleReportViewModel>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Serviceanfrage')),
+      appBar: AppBar(title: const Text('Störungsmeldung')),
       body: Stack(
         children: [
-          TroubleReportForm(
-            key: _troubleReportFormKey,
+          TroubleReportFormAndroid(
             formKey: _formKey,
             onSubmit: _handleSubmit,
           ),
@@ -132,7 +101,7 @@ class _TroubleReportViewState extends State<TroubleReportView> {
                       children: [
                         CircularProgressIndicator(),
                         SizedBox(height: 16),
-                        Text('Serviceanfrage wird gesendet...'),
+                        Text('Störungsmeldung wird gesendet...'),
                       ],
                     ),
                   ),
@@ -143,4 +112,4 @@ class _TroubleReportViewState extends State<TroubleReportView> {
       ),
     );
   }
-} 
+}

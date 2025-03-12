@@ -1,3 +1,5 @@
+// Rename file to trouble_report_screen_android.dart
+// Move file to lib/src/presentation/android/trouble_report_screen_android.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
