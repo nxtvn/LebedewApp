@@ -84,17 +84,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (Platform.isIOS) {
-      return CupertinoApp(
+      return const CupertinoApp(
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
-        theme: const CupertinoThemeData(),
-        localizationsDelegates: const [
+        theme: CupertinoThemeData(),
+        localizationsDelegates: [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [Locale('de', 'DE')],
-        home: const OfflineAwareApp(
+        supportedLocales: [Locale('de', 'DE')],
+        home: OfflineAwareApp(
           platform: AppPlatform.ios,
           child: LoginScreen(),
         ),

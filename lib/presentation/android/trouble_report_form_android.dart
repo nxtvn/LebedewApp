@@ -649,24 +649,18 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
             const SizedBox(height: 16),
             Consumer<TroubleReportViewModel>(
               builder: (context, viewModel, _) {
-                if (viewModel.urgencyLevel == null) {
-                  return const SizedBox.shrink();
-                }
-                
                 Color color = Colors.blue;
                 final urgencyLevel = viewModel.urgencyLevel;
-                if (urgencyLevel != null) {
-                  switch (urgencyLevel) {
-                    case UrgencyLevel.low:
-                      color = Colors.green;
-                      break;
-                    case UrgencyLevel.medium:
-                      color = Colors.orange;
-                      break;
-                    case UrgencyLevel.high:
-                      color = Colors.red;
-                      break;
-                  }
+                switch (urgencyLevel) {
+                  case UrgencyLevel.low:
+                    color = Colors.green;
+                    break;
+                  case UrgencyLevel.medium:
+                    color = Colors.orange;
+                    break;
+                  case UrgencyLevel.high:
+                    color = Colors.red;
+                    break;
                 }
                 
                 return Container(
@@ -677,7 +671,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                     border: Border.all(color: color.withAlpha(DesignConstants.mediumOpacityAlpha)),
                   ),
                   child: Text(
-                    viewModel.urgencyLevel!.description,
+                    urgencyLevel.description,
                     style: TextStyle(color: color),
                   ),
                 );
@@ -701,7 +695,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                     if (widget.formKey.currentState!.validate()) {
                       // Erstelle TroubleReport-Objekt und übergebe es an onSubmit
                       final report = TroubleReport(
-                        type: viewModel.type ?? RequestType.trouble,
+                        type: viewModel.type,
                         name: viewModel.name ?? '',
                         email: viewModel.email ?? '',
                         phone: viewModel.phone,
@@ -715,7 +709,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                         energySources: viewModel.energySources,
                         occurrenceDate: viewModel.occurrenceDate,
                         serviceHistory: viewModel.serviceHistory,
-                        urgencyLevel: viewModel.urgencyLevel ?? UrgencyLevel.medium,
+                        urgencyLevel: viewModel.urgencyLevel,
                         imagesPaths: const [],
                       );
                       widget.onSubmit(report);
