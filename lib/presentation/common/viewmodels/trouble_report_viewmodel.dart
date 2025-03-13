@@ -5,9 +5,13 @@ import '../../../domain/enums/urgency_level.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'dart:async';
 import '../../../core/utils/image_utils.dart';
+import '../../../core/network/network_info_facade.dart';
+import '../../../data/services/email_queue_service.dart';
+import 'package:get_it/get_it.dart';
 import 'base_viewmodel.dart';
 
 /// ViewModel für die Störungsmeldung
@@ -218,7 +222,24 @@ class TroubleReportViewModel extends BaseViewModel {
 
     return await runAsyncOperation<bool>(() async {
       try {
+        // Prüfe Netzwerkverbindung
+        final networkInfo = GetIt.I<NetworkInfoFacade>();
+        final isConnected = await networkInfo.isCurrentlyConnected;
+        
+        // Erstelle Report-Objekt
         final report = createReport();
+        
+        if (!isConnected) {
+          // Offline-Fallback: Speichere in Queue
+          await GetIt.I<EmailQueueService>().addToQueue(
+            report,
+            _images.map((image) => image.path).toList(),
+          );
+          
+          return true; // Gib Erfolg zurück, da wir es später senden werden
+        }
+        
+        // Online: Normal fortfahren
         final success = await _repository.submitReport(report, _images);
         
         if (!success) {
@@ -227,9 +248,23 @@ class TroubleReportViewModel extends BaseViewModel {
         
         return success;
       } on SocketException {
-        throw Exception('Keine Internetverbindung. Bitte überprüfen Sie Ihre Netzwerkeinstellungen und versuchen Sie es erneut.');
+        // Speichere in Queue für später
+        final report = createReport();
+        await GetIt.I<EmailQueueService>().addToQueue(
+          report,
+          _images.map((image) => image.path).toList(),
+        );
+        
+        throw Exception('Keine Internetverbindung. Ihre Meldung wurde gespeichert und wird automatisch gesendet, sobald eine Verbindung verfügbar ist.');
       } on TimeoutException {
-        throw Exception('Die Anfrage hat zu lange gedauert. Bitte versuchen Sie es später erneut.');
+        // Speichere in Queue für später
+        final report = createReport();
+        await GetIt.I<EmailQueueService>().addToQueue(
+          report,
+          _images.map((image) => image.path).toList(),
+        );
+        
+        throw Exception('Die Anfrage hat zu lange gedauert. Ihre Meldung wurde gespeichert und wird automatisch erneut gesendet.');
       } catch (e) {
         debugPrint('Fehler beim Senden der Störungsmeldung: $e');
         throw Exception('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
@@ -290,12 +325,32 @@ class TroubleReportViewModel extends BaseViewModel {
     }) ?? false;
   }
 
+  /// Fordert Berechtigungen für Kamera und Speicher an
+  ///
+  /// Gibt true zurück, wenn beide Berechtigungen erteilt wurden, sonst false
+  Future<bool> requestPermissions() async {
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.camera,
+      Permission.storage,
+    ].request();
+    
+    return statuses[Permission.camera]!.isGranted && 
+           statuses[Permission.storage]!.isGranted;
+  }
+
   /// Wählt ein Bild aus der Galerie oder Kamera aus
   ///
   /// [source] gibt an, ob das Bild aus der Galerie oder der Kamera stammt
   Future<void> pickImage(ImageSource source) async {
     try {
       setLoading();
+      
+      // Berechtigungen anfordern
+      final permissionsGranted = await requestPermissions();
+      if (!permissionsGranted) {
+        setError('Berechtigungen wurden verweigert. Bitte erteilen Sie die erforderlichen Berechtigungen in den Einstellungen.');
+        return;
+      }
       
       if (source == ImageSource.gallery) {
         await _pickMultipleImages();

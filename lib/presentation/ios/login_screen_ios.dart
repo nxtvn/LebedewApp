@@ -60,23 +60,27 @@ class _LoginScreenIOSState extends State<LoginScreenIOS> {
                       Image.asset(
                         'assets/logo.png',
                         height: 120,
+                        semanticLabel: 'Lebedew Logo',
                       ),
                       const SizedBox(height: 32),
-                      CupertinoTextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        placeholder: 'Passwort',
-                        prefix: const Padding(
-                          padding: EdgeInsets.only(left: 10),
-                          child: Icon(
-                            CupertinoIcons.lock,
-                            color: CupertinoColors.systemGrey,
+                      Semantics(
+                        label: 'Passwort eingeben',
+                        child: CupertinoTextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          placeholder: 'Passwort',
+                          prefix: const Padding(
+                            padding: EdgeInsets.only(left: 10),
+                            child: Icon(
+                              CupertinoIcons.lock,
+                              color: CupertinoColors.systemGrey,
+                            ),
                           ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: CupertinoColors.systemGrey4),
-                          borderRadius: BorderRadius.circular(8),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: CupertinoColors.systemGrey4),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                       if (_errorMessage.isNotEmpty)
@@ -91,27 +95,33 @@ class _LoginScreenIOSState extends State<LoginScreenIOS> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: CupertinoButton.filled(
-                          onPressed: () => _handleLogin(),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: const Text('Anmelden'),
+                      Semantics(
+                        label: 'Mit Passwort anmelden',
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: CupertinoButton.filled(
+                            onPressed: () => _handleLogin(),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: const Text('Anmelden'),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (context) => const PrivacyPolicyScreen(),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          'Datenschutzerklärung',
-                          style: TextStyle(fontSize: 14),
+                      Semantics(
+                        label: 'Datenschutzerklärung öffnen',
+                        child: CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              CupertinoPageRoute(
+                                builder: (context) => const PrivacyPolicyScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Datenschutzerklärung',
+                            style: TextStyle(fontSize: 14),
+                          ),
                         ),
                       ),
                     ],

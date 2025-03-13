@@ -499,27 +499,38 @@ class MailjetEmailService implements EmailService {
         }
       }
 
-      // Sende die E-Mail
+      // Verbesserte Fehlerbehandlung
       final response = await http.post(
         Uri.parse('$_baseUrl/send'),
         headers: headers,
         body: jsonEncode(emailData),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          _log.severe('Zeitüberschreitung beim E-Mail-Versand');
+          throw TimeoutException('Der E-Mail-Versand hat zu lange gedauert.');
+        },
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        // Versuche, die Fehlermeldung aus der Antwort zu extrahieren
-        String errorMessage = 'Unbekannter Fehler';
+        String errorMessage = 'HTTP-Fehler: ${response.statusCode}';
+        
         try {
           final responseData = jsonDecode(response.body);
-          if (responseData['ErrorMessage'] != null) {
-            errorMessage = responseData['ErrorMessage'];
-          } else if (responseData['Messages'] != null && 
-                    responseData['Messages'][0]['Errors'] != null && 
-                    responseData['Messages'][0]['Errors'].isNotEmpty) {
-            errorMessage = responseData['Messages'][0]['Errors'][0]['ErrorMessage'];
+          if (responseData is Map<String, dynamic>) {
+            if (responseData.containsKey('ErrorMessage')) {
+              errorMessage = responseData['ErrorMessage'];
+            } else if (responseData.containsKey('Messages') && 
+                     responseData['Messages'] is List && 
+                     responseData['Messages'].isNotEmpty &&
+                     responseData['Messages'][0].containsKey('Errors') &&
+                     responseData['Messages'][0]['Errors'] is List &&
+                     responseData['Messages'][0]['Errors'].isNotEmpty) {
+              errorMessage = responseData['Messages'][0]['Errors'][0]['ErrorMessage'];
+            }
           }
         } catch (e) {
-          errorMessage = 'HTTP-Fehler: ${response.statusCode}';
+          // Ignoriere Fehler beim Parsen des Fehlers
         }
         
         _log.severe('Fehler beim Senden der E-Mail: $errorMessage');
@@ -528,14 +539,36 @@ class MailjetEmailService implements EmailService {
 
       _log.info('E-Mail erfolgreich gesendet');
       return true;
+    } on SocketException catch (e) {
+      _log.severe('Netzwerkfehler beim Senden der E-Mail: $e');
+      // Füge zur Queue hinzu
+      await _queueService.addSimpleEmailToQueue(
+        EmailQueueItem(
+          subject: subject,
+          body: body,
+          toEmail: toEmail,
+          fromEmail: fromEmail,
+          fromName: fromName,
+          attachmentPaths: attachmentPaths,
+        ),
+      );
+      return false;
+    } on TimeoutException catch (e) {
+      _log.severe('Zeitüberschreitung beim Senden der E-Mail: $e');
+      // Füge zur Queue hinzu
+      await _queueService.addSimpleEmailToQueue(
+        EmailQueueItem(
+          subject: subject,
+          body: body,
+          toEmail: toEmail,
+          fromEmail: fromEmail,
+          fromName: fromName,
+          attachmentPaths: attachmentPaths,
+        ),
+      );
+      return false;
     } catch (e) {
-      if (e is SocketException) {
-        _log.severe('Netzwerkfehler beim Senden der E-Mail: Keine Verbindung möglich', e);
-      } else if (e is TimeoutException) {
-        _log.severe('Zeitüberschreitung beim Senden der E-Mail', e);
-      } else {
-        _log.severe('Fehler beim Senden der E-Mail', e);
-      }
+      _log.severe('Fehler beim Senden der E-Mail: $e');
       return false;
     }
   }

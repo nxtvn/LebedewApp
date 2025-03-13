@@ -61,25 +61,35 @@ class _OfflineStatusBannerState extends State<OfflineStatusBanner> {
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.wifi_off,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Sie sind offline. Einige Funktionen sind möglicherweise nicht verfügbar.',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.refresh,
+                  Semantics(
+                    label: 'Offline-Symbol',
+                    child: const Icon(
+                      Icons.wifi_off,
                       color: Colors.white,
                     ),
-                    onPressed: () async {
-                      await _checkConnectionStatus();
-                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Semantics(
+                      label: 'Offline-Status-Hinweis',
+                      child: const Text(
+                        'Sie sind offline. Formulare werden automatisch gesendet, sobald die Verbindung wiederhergestellt ist.',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  Semantics(
+                    label: 'Verbindungsstatus aktualisieren',
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                      ),
+                      onPressed: () async {
+                        await _checkConnectionStatus();
+                      },
+                      tooltip: 'Verbindung prüfen',
+                    ),
                   ),
                 ],
               ),

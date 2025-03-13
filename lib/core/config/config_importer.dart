@@ -16,7 +16,7 @@ class ConfigImporter {
     try {
       _log.info('Importiere Konfiguration aus Asset: $assetPath');
       
-      // Lade die Datei
+      // Versuche, die Datei zu laden
       final jsonString = await rootBundle.loadString(assetPath);
       final Map<String, dynamic> config = json.decode(jsonString);
       
@@ -26,8 +26,17 @@ class ConfigImporter {
       _log.info('Konfiguration erfolgreich importiert');
       return true;
     } catch (e) {
-      _log.severe('Fehler beim Importieren der Konfiguration', e);
-      return false;
+      if (e.toString().contains('Unable to load asset') || 
+          e.toString().contains('asset not found') ||
+          e.toString().contains('FileNotFoundException')) {
+        _log.warning('Konfigurationsdatei nicht gefunden: $assetPath. Standard-Konfiguration wird verwendet.');
+        // Initialisiere Standard-Konfigurationswerte
+        await _importDefaultConfig();
+        return true;
+      } else {
+        _log.severe('Fehler beim Importieren der Konfiguration: ${e.toString()}');
+        return false;
+      }
     }
   }
   
@@ -85,5 +94,15 @@ class ConfigImporter {
         await AppConfig.setApiKey(ConfigKeys.senderName, email['senderName']);
       }
     }
+  }
+  
+  /// Neue Hilfsmethode für Standardkonfiguration
+  static Future<void> _importDefaultConfig() async {
+    // Setze Standardwerte für die Konfiguration
+    await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, 'default_key');
+    await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, 'default_secret');
+    await AppConfig.setApiKey(ConfigKeys.serviceEmail, 'service@example.com');
+    await AppConfig.setApiKey(ConfigKeys.senderEmail, 'noreply@example.com');
+    await AppConfig.setApiKey(ConfigKeys.senderName, 'Lebedew Haustechnik');
   }
 } 

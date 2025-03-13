@@ -50,44 +50,54 @@ class _LoginScreenAndroidState extends State<LoginScreenAndroid> {
                         Image.asset(
                           'assets/logo.png',
                           height: 120,
+                          semanticLabel: 'Lebedew Logo',
                         ),
                         const SizedBox(height: 32),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: 'Passwort',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            errorText: _errorMessage.isEmpty ? null : _errorMessage,
+                        Semantics(
+                          label: 'Passwort eingeben',
+                          child: TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: InputDecoration(
+                              labelText: 'Passwort',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              errorText: _errorMessage.isEmpty ? null : _errorMessage,
+                            ),
+                            onSubmitted: (_) => _handleLogin(),
                           ),
-                          onSubmitted: (_) => _handleLogin(),
                         ),
                         const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _handleLogin(),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Anmelden',
-                                style: TextStyle(fontSize: 16),
+                        Semantics(
+                          label: 'Mit Passwort anmelden',
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () => _handleLogin(),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text(
+                                  'Anmelden',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => const PrivacyPolicyScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'Datenschutzerklärung',
-                            style: TextStyle(fontSize: 14),
+                        Semantics(
+                          label: 'Datenschutzerklärung öffnen',
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const PrivacyPolicyScreen(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'Datenschutzerklärung',
+                              style: TextStyle(fontSize: 14),
+                            ),
                           ),
                         ),
                       ],
