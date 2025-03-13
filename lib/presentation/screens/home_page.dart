@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'app_info_screen.dart';
+import 'create_trouble_report_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,15 +14,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   late AnimationController _controller;
   late Animation<double> _animation;
 
-  final List<Widget> _pages = [
-    const Center(child: Text('Lebedew Startseite')),
-    const Center(child: Text('Suche')),
-    const Center(child: Text('Profil')),
-  ];
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _pages = [
+      const Center(child: Text('Lebedew Startseite')),
+      const CreateTroubleReportPage(),
+      const AppInfoScreen(),
+    ];
+    
     _controller = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -56,12 +60,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             label: 'Start',
           ),
           NavigationDestination(
-            icon: Icon(Icons.search),
-            label: 'Suche',
+            icon: Icon(Icons.report_problem),
+            label: 'Störungsmeldung',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profil',
+            icon: Icon(Icons.info),
+            label: 'Info',
           ),
         ],
       ),

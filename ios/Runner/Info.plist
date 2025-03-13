@@ -27,9 +27,15 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Die App benötigt Zugriff auf die Kamera, um Fotos für die Störungsmeldung aufzunehmen.</string>
+	<string>Die App benötigt Zugriff auf die Kamera, um Fotos für die Dokumentation von Störungen aufzunehmen. Diese Fotos helfen unseren Technikern, das Problem besser zu verstehen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Die App benötigt Zugriff auf die Galerie, um Fotos für die Störungsmeldung auszuwählen.</string>
+	<string>Die App benötigt Zugriff auf Ihre Fotos, um bestehende Bilder für Störungsmeldungen auszuwählen. Diese Bilder helfen unseren Technikern, das Problem besser zu verstehen.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Für die Ortsbestimmung bei Störungsmeldungen, um den Service-Technikern Ihren Standort mitzuteilen. Dies ermöglicht eine schnellere Bearbeitung Ihrer Anfrage.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Die App benötigt Zugriff auf das Mikrofon, um Audioaufnahmen für die detaillierte Beschreibung von Störungen zu erstellen. Dies kann hilfreich sein, wenn bestimmte Geräusche Teil des Problems sind.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Diese Identifikation wird verwendet, um Ihnen ein personalisiertes Erlebnis in der App zu bieten und unsere Dienste zu verbessern. Wir verwenden diese Daten ausschließlich zur Verbesserung unserer Dienstleistungen.</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>http</string>
@@ -38,7 +44,7 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<false/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>api.mailjet.com</key>
@@ -47,6 +53,32 @@
 				<false/>
 				<key>NSIncludesSubdomains</key>
 				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+			<key>dev-api.lebedew.de</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+			<key>api.lebedew.de</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
 			</dict>
 		</dict>
 	</dict>
@@ -67,5 +99,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

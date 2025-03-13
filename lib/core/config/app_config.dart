@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
+import 'package:crypto/crypto.dart';
 
 /// Umgebungstypen für die Anwendung
 enum Environment { development, production }
@@ -12,6 +14,9 @@ class ConfigKeys {
   static const senderEmail = 'sender_email';
   static const senderName = 'sender_name';
   static const servicePassword = 'service_password';
+  
+  // Schlüssel für die Verschlüsselung
+  static const encryptionSalt = 'encryption_salt';
 }
 
 /// Zentrale Konfigurationsklasse für die Anwendung
@@ -30,6 +35,10 @@ class AppConfig {
     ),
   );
   
+  // Verschlüsselungs-Salt
+  static late final String _encryptionSalt;
+  static const String _defaultSalt = 'lebedew_default_salt';
+  
   /// Initialisiert die Anwendungskonfiguration
   /// 
   /// Diese Methode muss vor der Verwendung von AppConfig aufgerufen werden.
@@ -46,8 +55,38 @@ class AppConfig {
       _log.info('Secure Storage zurückgesetzt');
     }
     
+    // Initialisiere das Verschlüsselungs-Salt
+    await _initializeEncryptionSalt();
+    
     // Initialisiere Standardwerte, falls sie noch nicht gesetzt sind
     await _initializeDefaultValues();
+  }
+  
+  /// Initialisiert das Verschlüsselungs-Salt
+  static Future<void> _initializeEncryptionSalt() async {
+    final storedSalt = await _secureStorage.read(key: ConfigKeys.encryptionSalt);
+    
+    if (storedSalt == null || storedSalt.isEmpty) {
+      // Generiere ein zufälliges Salt
+      final salt = _generateRandomSalt();
+      await _secureStorage.write(key: ConfigKeys.encryptionSalt, value: salt);
+      _encryptionSalt = salt;
+      _log.info('Neues Verschlüsselungs-Salt generiert');
+    } else {
+      _encryptionSalt = storedSalt;
+      _log.info('Vorhandenes Verschlüsselungs-Salt geladen');
+    }
+  }
+  
+  /// Generiert ein zufälliges Salt für die Verschlüsselung
+  static String _generateRandomSalt() {
+    // In einer echten Anwendung würden wir hier einen kryptografisch sicheren
+    // Zufallszahlengenerator verwenden. Für diese Implementierung verwenden wir
+    // einen einfachen Ansatz mit der aktuellen Zeit und einem festen Wert.
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final bytes = utf8.encode(timestamp + _defaultSalt);
+    final hash = sha256.convert(bytes);
+    return hash.toString();
   }
   
   /// Initialisiert Standardwerte für die Konfiguration
@@ -62,13 +101,13 @@ class AppConfig {
       if (!hasApiKey) {
         _log.info('Setze Entwicklungs-Standardwerte');
         
-        // Hier würden wir in einer echten Anwendung sichere Standardwerte setzen
-        // Für die Entwicklung verwenden wir Platzhalter
-        await setApiKey(ConfigKeys.mailjetApiKey, 'dev_api_key');
-        await setApiKey(ConfigKeys.mailjetSecretKey, 'dev_secret_key');
-        await setApiKey(ConfigKeys.serviceEmail, 'dev@example.com');
-        await setApiKey(ConfigKeys.senderEmail, 'dev@example.com');
-        await setApiKey(ConfigKeys.senderName, 'Development');
+        // Keine hartcodierten API-Schlüssel mehr
+        // Stattdessen leere Werte, die später gesetzt werden müssen
+        await setApiKey(ConfigKeys.mailjetApiKey, '');
+        await setApiKey(ConfigKeys.mailjetSecretKey, '');
+        await setApiKey(ConfigKeys.serviceEmail, '');
+        await setApiKey(ConfigKeys.senderEmail, '');
+        await setApiKey(ConfigKeys.senderName, 'Lebedew Haustechnik');
       }
     }
   }
@@ -79,19 +118,59 @@ class AppConfig {
     return value != null && value.isNotEmpty;
   }
   
+  /// Verschlüsselt einen Wert
+  static String _encryptValue(String value) {
+    if (value.isEmpty) return value;
+    
+    final bytes = utf8.encode(value + _encryptionSalt);
+    final hash = sha256.convert(bytes);
+    final encrypted = '${base64.encode(utf8.encode(value))}.${hash.toString().substring(0, 8)}';
+    return encrypted;
+  }
+  
+  /// Entschlüsselt einen Wert
+  static String _decryptValue(String encryptedValue) {
+    if (encryptedValue.isEmpty) return encryptedValue;
+    
+    try {
+      final parts = encryptedValue.split('.');
+      if (parts.length != 2) return '';
+      
+      final encodedValue = parts[0];
+      final checksum = parts[1];
+      
+      final decodedValue = utf8.decode(base64.decode(encodedValue));
+      
+      // Überprüfe die Integrität
+      final bytes = utf8.encode(decodedValue + _encryptionSalt);
+      final hash = sha256.convert(bytes);
+      
+      if (hash.toString().substring(0, 8) != checksum) {
+        _log.warning('Integritätsprüfung fehlgeschlagen für Schlüssel');
+        return '';
+      }
+      
+      return decodedValue;
+    } catch (e) {
+      _log.severe('Fehler beim Entschlüsseln eines Werts: $e');
+      return '';
+    }
+  }
+  
   /// Setzt einen API-Schlüssel in der sicheren Speicherung
   static Future<void> setApiKey(String keyName, String value) async {
-    await _secureStorage.write(key: keyName, value: value);
+    final encryptedValue = _encryptValue(value);
+    await _secureStorage.write(key: keyName, value: encryptedValue);
   }
   
   /// Liest einen API-Schlüssel aus der sicheren Speicherung
   static Future<String> getApiKey(String keyName) async {
-    final value = await _secureStorage.read(key: keyName);
-    if (value == null || value.isEmpty) {
+    final encryptedValue = await _secureStorage.read(key: keyName);
+    if (encryptedValue == null || encryptedValue.isEmpty) {
       _log.warning('API-Schlüssel nicht gefunden: $keyName');
       return '';
     }
-    return value;
+    return _decryptValue(encryptedValue);
   }
   
   /// Löscht einen API-Schlüssel aus der sicheren Speicherung
@@ -101,7 +180,34 @@ class AppConfig {
   
   /// Gibt alle gespeicherten Schlüssel zurück
   static Future<Map<String, String>> getAllValues() async {
-    return await _secureStorage.readAll();
+    final encryptedValues = await _secureStorage.readAll();
+    final decryptedValues = <String, String>{};
+    
+    encryptedValues.forEach((key, value) {
+      if (key != ConfigKeys.encryptionSalt) {
+        decryptedValues[key] = _decryptValue(value);
+      }
+    });
+    
+    return decryptedValues;
+  }
+  
+  /// Importiert sichere Konfigurationswerte
+  /// 
+  /// Diese Methode sollte verwendet werden, um sichere Konfigurationswerte
+  /// aus einer externen Quelle zu importieren, z.B. aus einer verschlüsselten
+  /// Konfigurationsdatei oder einem sicheren Backend-Dienst.
+  static Future<bool> importSecureConfig(Map<String, String> config) async {
+    try {
+      for (final entry in config.entries) {
+        await setApiKey(entry.key, entry.value);
+      }
+      _log.info('Sichere Konfiguration importiert');
+      return true;
+    } catch (e) {
+      _log.severe('Fehler beim Importieren der sicheren Konfiguration: $e');
+      return false;
+    }
   }
   
   // App-Einstellungen

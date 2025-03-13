@@ -1,13 +1,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Zum Senden von Störungsmeldungen und Empfangen von Daten -->
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Zum Aufnehmen von Fotos für Störungsmeldungen -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- Zum Speichern von Fotos für Störungsmeldungen (nur für Android < 13) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    
+    <!-- Zum Auswählen von Fotos aus der Galerie für Störungsmeldungen (nur für Android < 13) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    
+    <!-- Zum Auswählen von Fotos aus der Galerie für Störungsmeldungen (für Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    
+    <!-- Zum Überprüfen der Netzwerkverbindung für Offline-Funktionalität -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name="${applicationName}"
         android:label="Lebedew App"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false">
         
         <activity
             android:name=".MainActivity"
@@ -26,6 +42,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            
+            <!-- App Links -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Akzeptiere Links von lebedew.de -->
+                <data android:scheme="https" android:host="lebedew.de" />
+                <data android:scheme="https" android:host="www.lebedew.de" />
             </intent-filter>
         </activity>
         

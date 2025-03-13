@@ -329,26 +329,122 @@ class TroubleReportViewModel extends BaseViewModel {
   ///
   /// Gibt true zurück, wenn beide Berechtigungen erteilt wurden, sonst false
   Future<bool> requestPermissions() async {
+    // Prüfe zuerst den aktuellen Status der Berechtigungen
+    final cameraStatus = await Permission.camera.status;
+    final storageStatus = Platform.isAndroid && await Permission.storage.status.isGranted
+        ? await Permission.storage.status
+        : await Permission.photos.status;
+    
+    // Wenn bereits alle Berechtigungen erteilt wurden, gib true zurück
+    if (cameraStatus.isGranted && (storageStatus.isGranted || storageStatus.isLimited)) {
+      return true;
+    }
+    
+    // Wenn Berechtigungen permanent verweigert wurden, zeige einen Dialog an
+    if (cameraStatus.isPermanentlyDenied || storageStatus.isPermanentlyDenied) {
+      setError('Einige Berechtigungen wurden dauerhaft verweigert. Bitte öffnen Sie die App-Einstellungen, um die Berechtigungen manuell zu erteilen.');
+      return false;
+    }
+    
+    // Fordere die Berechtigungen an
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
-      Permission.storage,
+      Platform.isAndroid ? Permission.storage : Permission.photos,
     ].request();
     
-    return statuses[Permission.camera]!.isGranted && 
-           statuses[Permission.storage]!.isGranted;
+    // Prüfe, ob alle Berechtigungen erteilt wurden
+    final cameraGranted = statuses[Permission.camera]!.isGranted;
+    final storageGranted = Platform.isAndroid 
+        ? statuses[Permission.storage]!.isGranted 
+        : (statuses[Permission.photos]!.isGranted || statuses[Permission.photos]!.isLimited);
+    
+    return cameraGranted && storageGranted;
+  }
+  
+  /// Zeigt einen Dialog an, der erklärt, warum die App bestimmte Berechtigungen benötigt
+  ///
+  /// [context] ist der BuildContext, der für den Dialog benötigt wird
+  /// [permission] ist die Berechtigung, für die der Dialog angezeigt wird
+  Future<bool> showPermissionDialog(BuildContext context, Permission permission) async {
+    String title = 'Berechtigung erforderlich';
+    String message = '';
+    
+    switch (permission) {
+      case Permission.camera:
+        title = 'Kamerazugriff erforderlich';
+        message = 'Die App benötigt Zugriff auf die Kamera, um Fotos für die Dokumentation von Störungen aufzunehmen. Diese Fotos helfen unseren Technikern, das Problem besser zu verstehen.';
+        break;
+      case Permission.storage:
+      case Permission.photos:
+        title = 'Fotogalerie-Zugriff erforderlich';
+        message = 'Die App benötigt Zugriff auf Ihre Fotos, um bestehende Bilder für Störungsmeldungen auszuwählen. Diese Bilder helfen unseren Technikern, das Problem besser zu verstehen.';
+        break;
+      case Permission.location:
+        title = 'Standortzugriff erforderlich';
+        message = 'Für die Ortsbestimmung bei Störungsmeldungen, um den Service-Technikern Ihren Standort mitzuteilen. Dies ermöglicht eine schnellere Bearbeitung Ihrer Anfrage.';
+        break;
+      default:
+        message = 'Diese Berechtigung wird benötigt, um die App ordnungsgemäß zu nutzen.';
+    }
+    
+    // Zeige den Dialog an
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Ablehnen'),
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+            ),
+            TextButton(
+              child: const Text('Zulassen'),
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+    
+    return result ?? false;
   }
 
   /// Wählt ein Bild aus der Galerie oder Kamera aus
   ///
   /// [source] gibt an, ob das Bild aus der Galerie oder der Kamera stammt
-  Future<void> pickImage(ImageSource source) async {
+  /// [context] ist der BuildContext, der für Dialoge benötigt wird
+  Future<void> pickImage(ImageSource source, [BuildContext? context]) async {
     try {
       setLoading();
       
       // Berechtigungen anfordern
       final permissionsGranted = await requestPermissions();
       if (!permissionsGranted) {
-        setError('Berechtigungen wurden verweigert. Bitte erteilen Sie die erforderlichen Berechtigungen in den Einstellungen.');
+        // Wenn der Kontext verfügbar ist, zeige einen Dialog an
+        if (context != null) {
+          final Permission permission = source == ImageSource.camera 
+              ? Permission.camera 
+              : (Platform.isAndroid ? Permission.storage : Permission.photos);
+          
+          // Prüfe, ob der Widget-Baum noch montiert ist, bevor der Dialog angezeigt wird
+          if (context.mounted) {
+            final userWantsPermission = await showPermissionDialog(context, permission);
+            
+            if (userWantsPermission) {
+              // Öffne die App-Einstellungen
+              await openAppSettings();
+            }
+          }
+        } else {
+          setError('Berechtigungen wurden verweigert. Bitte erteilen Sie die erforderlichen Berechtigungen in den Einstellungen.');
+        }
         return;
       }
       

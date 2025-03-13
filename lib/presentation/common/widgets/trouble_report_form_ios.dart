@@ -79,14 +79,13 @@ class TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Trouble
     _viewModel.reset();
   }
 
+  /// Wählt ein Bild aus der Galerie oder Kamera aus
   Future<void> _pickImage(ImageSource source) async {
-    setState(() => _isLoading = true);
     try {
-      await _viewModel.pickImage(source);
+      setState(() => _isLoading = true);
+      await _viewModel.pickImage(source, context);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() => _isLoading = false);
     }
   }
 

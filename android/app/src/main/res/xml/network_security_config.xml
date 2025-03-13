@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Standardkonfiguration für alle Domains -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Spezifische Konfiguration für die Mailjet API -->
+    <domain-config>
+        <domain includeSubdomains="true">api.mailjet.com</domain>
+        <pin-set expiration="2025-01-01">
+            <!-- Hier könnten in einer Produktionsumgebung Certificate Pinning Hashes stehen -->
+        </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- Spezifische Konfiguration für die Lebedew API -->
+    <domain-config>
+        <domain includeSubdomains="true">api.lebedew.de</domain>
+        <domain includeSubdomains="true">dev-api.lebedew.de</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- Spezifische Konfiguration für die Lebedew Website -->
+    <domain-config>
+        <domain includeSubdomains="true">lebedew.de</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config> 

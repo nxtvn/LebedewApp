@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import '../common/widgets/trouble_report_form.dart';
 import '../../domain/entities/trouble_report.dart';
@@ -100,10 +99,11 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     _viewModel.reset();
   }
 
+  /// Wählt ein Bild aus der Galerie oder Kamera aus
   Future<void> _pickImage(ImageSource source) async {
-    setState(() => _isLoading = true);
     try {
-      await _viewModel.pickImage(source);
+      setState(() => _isLoading = true);
+      await _viewModel.pickImage(source, context);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

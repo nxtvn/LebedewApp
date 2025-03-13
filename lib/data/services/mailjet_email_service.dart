@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:image/image.dart' as img;
 import '../../domain/entities/trouble_report.dart';
 import '../../domain/services/email_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/network_info_facade.dart';
+import '../../core/network/secure_http_client.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
 import 'package:flutter/foundation.dart';
@@ -21,6 +21,7 @@ class MailjetEmailService implements EmailService {
   final String _toEmail;
   final EmailQueueService _queueService;
   final NetworkInfoFacade _networkInfo;
+  final SecureHttpClient _httpClient = SecureHttpClient();
   
   // Zwischengespeicherte Werte für Absender-E-Mail und -Name
   String? _cachedSenderEmail;
@@ -143,15 +144,15 @@ class MailjetEmailService implements EmailService {
         }
       }
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/send'),
+      final response = await _httpClient.post(
+        '$_baseUrl/send',
         headers: headers,
         body: jsonEncode(emailData),
       );
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      return _httpClient.isSuccessful(response);
     } catch (e) {
-      _log.severe('Fehler beim Senden einer einfachen E-Mail', e);
+      _log.severe('Fehler beim Senden der einfachen E-Mail: $e');
       return false;
     }
   }
@@ -344,8 +345,8 @@ class MailjetEmailService implements EmailService {
       ''';
 
       // API-Request für Service E-Mail
-      final serviceResponse = await http.post(
-        Uri.parse('$_baseUrl/send'),
+      final serviceResponse = await _httpClient.post(
+        '$_baseUrl/send',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Basic $auth',
@@ -373,8 +374,8 @@ class MailjetEmailService implements EmailService {
       );
 
       // API-Request für Kunden E-Mail
-      final customerResponse = await http.post(
-        Uri.parse('$_baseUrl/send'),
+      final customerResponse = await _httpClient.post(
+        '$_baseUrl/send',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Basic $auth',
@@ -490,7 +491,7 @@ class MailjetEmailService implements EmailService {
               });
             }
           } catch (e) {
-            debugPrint('Error adding attachment: $e');
+            _log.warning('Fehler beim Hinzufügen des Anhangs: $e');
           }
         }
         
@@ -499,20 +500,13 @@ class MailjetEmailService implements EmailService {
         }
       }
 
-      // Verbesserte Fehlerbehandlung
-      final response = await http.post(
-        Uri.parse('$_baseUrl/send'),
+      final response = await _httpClient.post(
+        '$_baseUrl/send',
         headers: headers,
         body: jsonEncode(emailData),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          _log.severe('Zeitüberschreitung beim E-Mail-Versand');
-          throw TimeoutException('Der E-Mail-Versand hat zu lange gedauert.');
-        },
       );
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
+      if (!_httpClient.isSuccessful(response)) {
         String errorMessage = 'HTTP-Fehler: ${response.statusCode}';
         
         try {
