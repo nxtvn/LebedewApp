@@ -10,7 +10,6 @@ import '../../core/network/network_info_facade.dart';
 import '../../core/network/secure_http_client.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
-import 'package:flutter/foundation.dart';
 
 /// Implementierung des E-Mail-Services mit Mailjet
 class MailjetEmailService implements EmailService {
@@ -53,7 +52,8 @@ class MailjetEmailService implements EmailService {
   
   /// Lädt die Absender-Informationen aus AppConfig
   Future<void> _loadSenderInfo() async {
-    _cachedSenderEmail = await AppConfig.senderEmail;
+    // Aktualisiere die Absender-E-Mail auf die neue Adresse
+    _cachedSenderEmail = "julian.scherer@nextvision.agency";
     _cachedSenderName = await AppConfig.senderName;
     _log.info('Absender-Informationen geladen: $_cachedSenderName <$_cachedSenderEmail>');
   }
@@ -63,7 +63,7 @@ class MailjetEmailService implements EmailService {
     if (_cachedSenderEmail == null || _cachedSenderEmail!.isEmpty) {
       await _loadSenderInfo();
     }
-    return _cachedSenderEmail ?? '';
+    return _cachedSenderEmail ?? 'julian.scherer@nextvision.agency';
   }
   
   /// Gibt den Absender-Namen zurück
@@ -91,6 +91,14 @@ class MailjetEmailService implements EmailService {
 
   Future<bool> _sendSimpleEmail(EmailQueueItem email) async {
     try {
+      _log.info('Sende einfache E-Mail an: ${email.toEmail}');
+      
+      // Validiere erforderliche Felder
+      if (email.toEmail.isEmpty || email.subject.isEmpty || email.body.isEmpty) {
+        _log.severe('Fehler beim Senden der einfachen E-Mail: Erforderliche Felder fehlen');
+        return false;
+      }
+      
       final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
       final headers = {
         'Content-Type': 'application/json',
@@ -133,9 +141,11 @@ class MailjetEmailService implements EmailService {
                 'Filename': filename,
                 'Base64Content': base64Encode(bytes),
               });
+            } else {
+              _log.warning('Anhang existiert nicht: $path');
             }
           } catch (e) {
-            debugPrint('Error adding attachment: $e');
+            _log.severe('Fehler beim Hinzufügen des Anhangs: $e');
           }
         }
         
@@ -144,13 +154,21 @@ class MailjetEmailService implements EmailService {
         }
       }
 
+      _log.info('Sende E-Mail-Anfrage an Mailjet API');
       final response = await _httpClient.post(
         '$_baseUrl/send',
         headers: headers,
         body: jsonEncode(emailData),
       );
 
-      return _httpClient.isSuccessful(response);
+      final isSuccess = _httpClient.isSuccessful(response);
+      if (isSuccess) {
+        _log.info('E-Mail erfolgreich gesendet an: ${email.toEmail}');
+      } else {
+        _log.severe('Fehler beim Senden der E-Mail: ${response.statusCode} - ${response.body}');
+      }
+      
+      return isSuccess;
     } catch (e) {
       _log.severe('Fehler beim Senden der einfachen E-Mail: $e');
       return false;
@@ -172,13 +190,52 @@ class MailjetEmailService implements EmailService {
       // Bild als JPEG mit 80% Qualität enkodieren
       return img.encodeJpg(image, quality: 80);
     } catch (e) {
-      _log.warning('Fehler bei der Bildkomprimierung: $e');
+      _log.warning('Fehler bei der Bildkomprimierung: $e', e);
       return imageFile.readAsBytesSync();
     }
   }
 
+  /// Validiert die erforderlichen Felder eines Störungsberichts
+  bool _validateTroubleReport(TroubleReport report) {
+    if (report.name.isEmpty) {
+      _log.warning('Validierungsfehler: Name fehlt');
+      return false;
+    }
+    
+    if (report.email.isEmpty) {
+      _log.warning('Validierungsfehler: E-Mail fehlt');
+      return false;
+    }
+    
+    if (report.phone == null || report.phone!.isEmpty) {
+      _log.warning('Validierungsfehler: Telefonnummer fehlt');
+      return false;
+    }
+    
+    if (report.description.isEmpty) {
+      _log.warning('Validierungsfehler: Beschreibung fehlt');
+      return false;
+    }
+    
+    // Prüfe, ob eine Kundennummer angegeben wurde, wenn ein Wartungsvertrag vorhanden ist
+    if (report.hasMaintenanceContract && (report.customerNumber == null || report.customerNumber!.isEmpty)) {
+      _log.warning('Validierungsfehler: Kundennummer fehlt bei vorhandenem Wartungsvertrag');
+      return false;
+    }
+    
+    return true;
+  }
+
   Future<bool> _sendEmail(TroubleReport form, List<File> images) async {
     try {
+      _log.info('Sende Störungsmeldung für: ${form.name} <${form.email}>');
+      
+      // Validiere den Störungsbericht
+      if (!_validateTroubleReport(form)) {
+        _log.severe('Fehler beim Senden der Störungsmeldung: Validierung fehlgeschlagen');
+        return false;
+      }
+      
       // Basis64-kodierte Authentifizierung
       final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
       
@@ -249,162 +306,101 @@ class MailjetEmailService implements EmailService {
           
           <p><strong>Meldungstyp:</strong> ${form.type.label}</p>
           <p><strong>Dringlichkeit:</strong> ${form.urgencyLevel.label}</p>
-          ${form.occurrenceDate != null ? '<p><strong>Datum des Vorfalls:</strong> ${DateFormat('dd.MM.yyyy').format(form.occurrenceDate!)}</p>' : ''}
+          <p><strong>Beschreibung:</strong> ${form.description}</p>
           
-          <h4 style="color: #1976D2; margin-top: 15px;">Ihre Kontaktdaten</h4>
-          <p><strong>Name:</strong> ${form.name}</p>
-          <p><strong>E-Mail:</strong> ${form.email}</p>
-          ${form.phone != null ? '<p><strong>Telefon:</strong> ${form.phone}</p>' : ''}
-          ${form.address != null ? '<p><strong>Adresse:</strong> ${form.address}</p>' : ''}
-          
-          <h4 style="color: #1976D2; margin-top: 15px;">Geräteinformationen</h4>
           ${form.deviceModel != null ? '<p><strong>Gerätemodell:</strong> ${form.deviceModel}</p>' : ''}
           ${form.manufacturer != null ? '<p><strong>Hersteller:</strong> ${form.manufacturer}</p>' : ''}
           ${form.serialNumber != null ? '<p><strong>Seriennummer:</strong> ${form.serialNumber}</p>' : ''}
-          ${form.errorCode != null ? '<p><strong>Fehlercode:</strong> ${form.errorCode}</p>' : ''}
-          
-          <h4 style="color: #1976D2; margin-top: 15px;">Ihre Problembeschreibung</h4>
-          <p>${form.description}</p>
           
           ${images.isNotEmpty ? '<p><strong>Angehängte Bilder:</strong> ${images.length} Bild${images.length == 1 ? '' : 'er'}</p>' : ''}
         </div>
         
-        <p>Wir werden Ihre Meldung schnellstmöglich bearbeiten. Bei dringenden Fällen werden wir uns umgehend mit Ihnen in Verbindung setzen.</p>
+        <p>Sollten Sie weitere Fragen haben oder zusätzliche Informationen bereitstellen möchten, antworten Sie bitte auf diese E-Mail oder kontaktieren Sie uns telefonisch.</p>
         
-        <p>Mit freundlichen Grüßen<br>Ihr Lebedew Haustechnik Service-Team</p>
+        <p>Mit freundlichen Grüßen,<br>
+        Ihr Lebedew Haustechnik Team</p>
       ''';
 
-      // Service E-Mail Text
-      final serviceTextBody = '''
-        Neue Störungsmeldung
+      // Erstelle die E-Mail-Anfrage für den Service
+      final serviceEmailData = {
+        'Messages': [
+          {
+            'From': {
+              'Email': await _senderEmail,
+              'Name': await _senderName,
+            },
+            'To': [
+              {
+                'Email': _toEmail,
+                'Name': 'Service Team',
+              }
+            ],
+            'Subject': 'Neue Störungsmeldung: ${form.type.label} (${form.urgencyLevel.label})',
+            'HTMLPart': serviceHtmlBody,
+            'Attachments': validAttachments,
+          }
+        ]
+      };
 
-        Art des Anliegens:
-        Typ: ${form.type.label}
-        Dringlichkeit: ${form.urgencyLevel.label}
-        
-        Kontaktdaten:
-        Name: ${form.name}
-        E-Mail: ${form.email}
-        ${form.phone != null ? 'Telefon: ${form.phone}\n' : ''}
-        ${form.address != null ? 'Adresse: ${form.address}\n' : ''}
-        
-        Gerätedaten:
-        ${form.deviceModel != null ? 'Gerätemodell: ${form.deviceModel}\n' : ''}
-        ${form.manufacturer != null ? 'Hersteller: ${form.manufacturer}\n' : ''}
-        ${form.serialNumber != null ? 'Seriennummer: ${form.serialNumber}\n' : ''}
-        ${form.errorCode != null ? 'Fehlercode: ${form.errorCode}\n' : ''}
-        ${form.occurrenceDate != null ? 'Datum des Vorfalls: ${DateFormat('dd.MM.yyyy').format(form.occurrenceDate!)}\n' : ''}
-        
-        Service-Informationen:
-        Wartungsvertrag: ${form.hasMaintenanceContract ? 'Ja' : 'Nein'}
-        ${form.serviceHistory != null ? 'Servicehistorie: ${form.serviceHistory}\n' : ''}
-        ${form.energySources.isNotEmpty ? 'Energiequellen: ${form.energySources.join(', ')}\n' : ''}
-        
-        Problembeschreibung:
-        ${form.description}
-        
-        ${images.isNotEmpty ? '\nAngehängte Bilder: ${images.length} Bild${images.length == 1 ? '' : 'er'}\n' : ''}
-      ''';
+      // Erstelle die E-Mail-Anfrage für den Kunden
+      final customerEmailData = {
+        'Messages': [
+          {
+            'From': {
+              'Email': await _senderEmail,
+              'Name': await _senderName,
+            },
+            'To': [
+              {
+                'Email': form.email, // Stelle sicher, dass die Kunden-E-Mail immer an die E-Mail-Adresse des Kunden gesendet wird
+                'Name': form.name,
+              }
+            ],
+            'Subject': 'Bestätigung Ihrer Störungsmeldung',
+            'HTMLPart': customerHtmlBody,
+          }
+        ]
+      };
 
-      // Kunden E-Mail Text
-      final customerTextBody = '''
-        Bestätigung Ihrer Störungsmeldung
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $auth',
+      };
 
-        Sehr geehrte(r) ${form.name},
-
-        vielen Dank für Ihre Störungsmeldung. Wir haben Ihre Meldung erfolgreich erhalten und werden uns zeitnah mit Ihnen in Verbindung setzen.
-
-        Nachfolgend finden Sie eine Zusammenfassung Ihrer Meldung:
-
-        Details Ihrer Meldung:
-        Meldungstyp: ${form.type.label}
-        Dringlichkeit: ${form.urgencyLevel.label}
-        ${form.occurrenceDate != null ? 'Datum des Vorfalls: ${DateFormat('dd.MM.yyyy').format(form.occurrenceDate!)}\n' : ''}
-
-        Ihre Kontaktdaten:
-        Name: ${form.name}
-        E-Mail: ${form.email}
-        ${form.phone != null ? 'Telefon: ${form.phone}\n' : ''}
-        ${form.address != null ? 'Adresse: ${form.address}\n' : ''}
-
-        Geräteinformationen:
-        ${form.deviceModel != null ? 'Gerätemodell: ${form.deviceModel}\n' : ''}
-        ${form.manufacturer != null ? 'Hersteller: ${form.manufacturer}\n' : ''}
-        ${form.serialNumber != null ? 'Seriennummer: ${form.serialNumber}\n' : ''}
-        ${form.errorCode != null ? 'Fehlercode: ${form.errorCode}\n' : ''}
-
-        Ihre Problembeschreibung:
-        ${form.description}
-
-        ${images.isNotEmpty ? 'Angehängte Bilder: ${images.length} Bild${images.length == 1 ? '' : 'er'}\n' : ''}
-
-        Wir werden Ihre Meldung schnellstmöglich bearbeiten. Bei dringenden Fällen werden wir uns umgehend mit Ihnen in Verbindung setzen.
-
-        Mit freundlichen Grüßen
-        Ihr Lebedew Haustechnik Service-Team
-      ''';
-
-      // API-Request für Service E-Mail
+      _log.info('Sende Service-E-Mail an: $_toEmail');
+      
+      // Sende die Service-E-Mail
       final serviceResponse = await _httpClient.post(
         '$_baseUrl/send',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic $auth',
-        },
-        body: json.encode({
-          'Messages': [
-            {
-              'From': {
-                'Email': await _senderEmail,
-                'Name': await _senderName,
-              },
-              'To': [
-                {
-                  'Email': _toEmail,
-                  'Name': 'Service',
-                }
-              ],
-              'Subject': 'Neue Störungsmeldung von ${form.name}',
-              'TextPart': serviceTextBody,
-              'HTMLPart': serviceHtmlBody,
-              if (validAttachments.isNotEmpty) 'Attachments': validAttachments,
-            }
-          ],
-        }),
+        headers: headers,
+        body: jsonEncode(serviceEmailData),
       );
 
-      // API-Request für Kunden E-Mail
+      if (!_httpClient.isSuccessful(serviceResponse)) {
+        _log.severe('Fehler beim Senden der Service-E-Mail: ${serviceResponse.statusCode} - ${serviceResponse.body}');
+        return false;
+      }
+      
+      _log.info('Service-E-Mail erfolgreich gesendet');
+      _log.info('Sende Bestätigungs-E-Mail an Kunden: ${form.email}');
+
+      // Sende die Kunden-E-Mail
       final customerResponse = await _httpClient.post(
         '$_baseUrl/send',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic $auth',
-        },
-        body: json.encode({
-          'Messages': [
-            {
-              'From': {
-                'Email': await _senderEmail,
-                'Name': await _senderName,
-              },
-              'To': [
-                {
-                  'Email': form.email,
-                  'Name': form.name,
-                }
-              ],
-              'Subject': 'Bestätigung Ihrer Störungsmeldung',
-              'TextPart': customerTextBody,
-              'HTMLPart': customerHtmlBody,
-              if (validAttachments.isNotEmpty) 'Attachments': validAttachments,
-            }
-          ],
-        }),
+        headers: headers,
+        body: jsonEncode(customerEmailData),
       );
 
-      return serviceResponse.statusCode == 200 && customerResponse.statusCode == 200;
-    } catch (e) {
-      _log.severe('Fehler beim E-Mail-Versand', e);
+      if (!_httpClient.isSuccessful(customerResponse)) {
+        _log.severe('Fehler beim Senden der Kunden-E-Mail: ${customerResponse.statusCode} - ${customerResponse.body}');
+        // Wir geben trotzdem true zurück, da die Service-E-Mail erfolgreich gesendet wurde
+        return true;
+      }
+
+      _log.info('Kunden-E-Mail erfolgreich gesendet');
+      return true;
+    } catch (e, stackTrace) {
+      _log.severe('Fehler beim Senden der E-Mail: $e', e, stackTrace);
       return false;
     }
   }
@@ -415,24 +411,17 @@ class MailjetEmailService implements EmailService {
     required List<File> images,
   }) async {
     try {
-      final success = await _sendEmail(form, images);
+      _log.info('Sende Störungsmeldung für: ${form.name} <${form.email}>');
       
-      if (!success) {
-        // Bei Fehler zur Queue hinzufügen
-        await _queueService.addToQueue(
-          form,
-          images.map((file) => file.path).toList(),
-        );
+      // Validiere den Störungsbericht
+      if (!_validateTroubleReport(form)) {
+        _log.severe('Fehler beim Senden der Störungsmeldung: Validierung fehlgeschlagen');
         return false;
       }
       
-      return true;
-    } catch (e) {
-      // Bei Netzwerkfehlern zur Queue hinzufügen
-      await _queueService.addToQueue(
-        form,
-        images.map((file) => file.path).toList(),
-      );
+      return await _sendEmail(form, images);
+    } catch (e, stackTrace) {
+      _log.severe('Fehler beim Senden der Störungsmeldung: $e', e, stackTrace);
       return false;
     }
   }
@@ -447,13 +436,36 @@ class MailjetEmailService implements EmailService {
     List<String>? attachmentPaths,
   }) async {
     try {
-      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic $auth',
-      };
-
-      final Map<String, dynamic> emailData = {
+      _log.info('Sende E-Mail an: $toEmail');
+      
+      // Validiere erforderliche Felder
+      if (subject.isEmpty || body.isEmpty || toEmail.isEmpty) {
+        _log.severe('Fehler beim Senden der E-Mail: Erforderliche Felder fehlen');
+        return false;
+      }
+      
+      // Prüfe, ob eine Netzwerkverbindung besteht
+      final isConnected = await _networkInfo.isCurrentlyConnected;
+      if (!isConnected) {
+        _log.info('Keine Netzwerkverbindung. E-Mail wird in die Warteschlange gestellt.');
+        
+        // Füge die E-Mail zur Warteschlange hinzu
+        await _queueService.addSimpleEmailToQueue(
+          EmailQueueItem(
+            subject: subject,
+            body: body,
+            toEmail: toEmail,
+            fromEmail: fromEmail ?? await _senderEmail,
+            fromName: fromName ?? await _senderName,
+            attachmentPaths: attachmentPaths,
+          ),
+        );
+        
+        return true; // Wir geben true zurück, da die E-Mail in die Warteschlange gestellt wurde
+      }
+      
+      // Erstelle die E-Mail-Anfrage
+      final emailData = {
         'Messages': [
           {
             'From': {
@@ -471,7 +483,7 @@ class MailjetEmailService implements EmailService {
           }
         ]
       };
-
+      
       // Füge Anhänge hinzu, falls vorhanden
       if (attachmentPaths != null && attachmentPaths.isNotEmpty) {
         final attachments = <Map<String, dynamic>>[];
@@ -489,80 +501,45 @@ class MailjetEmailService implements EmailService {
                 'Filename': filename,
                 'Base64Content': base64Encode(bytes),
               });
+            } else {
+              _log.warning('Anhang existiert nicht: $path');
             }
           } catch (e) {
-            _log.warning('Fehler beim Hinzufügen des Anhangs: $e');
+            _log.severe('Fehler beim Hinzufügen des Anhangs: $e');
           }
         }
         
         if (attachments.isNotEmpty) {
-          emailData['Messages'][0]['Attachments'] = attachments;
+          emailData['Messages']![0]['Attachments'] = attachments;
         }
       }
-
+      
+      // Basis64-kodierte Authentifizierung
+      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $auth',
+      };
+      
+      _log.info('Sende E-Mail-Anfrage an Mailjet API');
+      
+      // Sende die E-Mail
       final response = await _httpClient.post(
         '$_baseUrl/send',
         headers: headers,
         body: jsonEncode(emailData),
       );
-
-      if (!_httpClient.isSuccessful(response)) {
-        String errorMessage = 'HTTP-Fehler: ${response.statusCode}';
-        
-        try {
-          final responseData = jsonDecode(response.body);
-          if (responseData is Map<String, dynamic>) {
-            if (responseData.containsKey('ErrorMessage')) {
-              errorMessage = responseData['ErrorMessage'];
-            } else if (responseData.containsKey('Messages') && 
-                     responseData['Messages'] is List && 
-                     responseData['Messages'].isNotEmpty &&
-                     responseData['Messages'][0].containsKey('Errors') &&
-                     responseData['Messages'][0]['Errors'] is List &&
-                     responseData['Messages'][0]['Errors'].isNotEmpty) {
-              errorMessage = responseData['Messages'][0]['Errors'][0]['ErrorMessage'];
-            }
-          }
-        } catch (e) {
-          // Ignoriere Fehler beim Parsen des Fehlers
-        }
-        
-        _log.severe('Fehler beim Senden der E-Mail: $errorMessage');
-        return false;
+      
+      final isSuccess = _httpClient.isSuccessful(response);
+      if (isSuccess) {
+        _log.info('E-Mail erfolgreich gesendet an: $toEmail');
+      } else {
+        _log.severe('Fehler beim Senden der E-Mail: ${response.statusCode} - ${response.body}');
       }
-
-      _log.info('E-Mail erfolgreich gesendet');
-      return true;
-    } on SocketException catch (e) {
-      _log.severe('Netzwerkfehler beim Senden der E-Mail: $e');
-      // Füge zur Queue hinzu
-      await _queueService.addSimpleEmailToQueue(
-        EmailQueueItem(
-          subject: subject,
-          body: body,
-          toEmail: toEmail,
-          fromEmail: fromEmail,
-          fromName: fromName,
-          attachmentPaths: attachmentPaths,
-        ),
-      );
-      return false;
-    } on TimeoutException catch (e) {
-      _log.severe('Zeitüberschreitung beim Senden der E-Mail: $e');
-      // Füge zur Queue hinzu
-      await _queueService.addSimpleEmailToQueue(
-        EmailQueueItem(
-          subject: subject,
-          body: body,
-          toEmail: toEmail,
-          fromEmail: fromEmail,
-          fromName: fromName,
-          attachmentPaths: attachmentPaths,
-        ),
-      );
-      return false;
-    } catch (e) {
-      _log.severe('Fehler beim Senden der E-Mail: $e');
+      
+      return isSuccess;
+    } catch (e, stackTrace) {
+      _log.severe('Fehler beim Senden der E-Mail: $e', e, stackTrace);
       return false;
     }
   }

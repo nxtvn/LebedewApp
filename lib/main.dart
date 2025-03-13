@@ -9,6 +9,7 @@ import 'core/constants/app_constants.dart';
 import 'core/config/injection.dart';
 import 'core/config/app_config.dart';
 import 'core/config/env.dart';
+import 'core/logging/app_logger.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/common/widgets/offline_status_banner.dart';
 
@@ -17,7 +18,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Konfiguriere Logger
-  _setupLogging();
+  await _setupLogging();
   
   // Initialisiere Konfiguration
   await _initializeConfig();
@@ -39,7 +40,11 @@ void main() async {
 }
 
 /// Konfiguriert das Logging-System
-void _setupLogging() {
+Future<void> _setupLogging() async {
+  // Initialisiere das erweiterte Logging-System
+  await AppLogger.initialize();
+  
+  // Konfiguriere das Root-Logger für Abwärtskompatibilität
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((record) {
     // ignore: avoid_print
@@ -53,6 +58,10 @@ void _setupLogging() {
       print('Stack trace: ${record.stackTrace}');
     }
   });
+  
+  // Hole einen Logger für die Hauptanwendung
+  final log = AppLogger.getLogger('Main');
+  log.info('Logging-System initialisiert');
 }
 
 /// Initialisiert die Konfiguration

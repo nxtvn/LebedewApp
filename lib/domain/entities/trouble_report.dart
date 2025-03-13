@@ -10,6 +10,7 @@ class TroubleReport {
   final String? phone;
   final String? address;
   final bool hasMaintenanceContract;
+  final String? customerNumber;
   final String description;
   final String? deviceModel;
   final String? manufacturer;
@@ -21,6 +22,7 @@ class TroubleReport {
   final UrgencyLevel urgencyLevel;
   final List<String> imagesPaths;
   final bool isSynced;
+  final bool hasAcceptedTerms;
 
   TroubleReport({
     String? id,
@@ -30,6 +32,7 @@ class TroubleReport {
     this.phone,
     this.address,
     this.hasMaintenanceContract = false,
+    this.customerNumber,
     required this.description,
     this.deviceModel,
     this.manufacturer,
@@ -41,6 +44,7 @@ class TroubleReport {
     required this.urgencyLevel,
     this.imagesPaths = const [],
     this.isSynced = false,
+    this.hasAcceptedTerms = true,
   }) : id = id ?? const Uuid().v4();
 
   TroubleReport copyWith({
@@ -51,6 +55,7 @@ class TroubleReport {
     String? phone,
     String? address,
     bool? hasMaintenanceContract,
+    String? customerNumber,
     String? description,
     String? deviceModel,
     String? manufacturer,
@@ -62,6 +67,7 @@ class TroubleReport {
     UrgencyLevel? urgencyLevel,
     List<String>? imagesPaths,
     bool? isSynced,
+    bool? hasAcceptedTerms,
   }) {
     return TroubleReport(
       id: id ?? this.id,
@@ -71,6 +77,7 @@ class TroubleReport {
       phone: phone ?? this.phone,
       address: address ?? this.address,
       hasMaintenanceContract: hasMaintenanceContract ?? this.hasMaintenanceContract,
+      customerNumber: customerNumber ?? this.customerNumber,
       description: description ?? this.description,
       deviceModel: deviceModel ?? this.deviceModel,
       manufacturer: manufacturer ?? this.manufacturer,
@@ -82,6 +89,7 @@ class TroubleReport {
       urgencyLevel: urgencyLevel ?? this.urgencyLevel,
       imagesPaths: imagesPaths ?? this.imagesPaths,
       isSynced: isSynced ?? this.isSynced,
+      hasAcceptedTerms: hasAcceptedTerms ?? this.hasAcceptedTerms,
     );
   }
 
@@ -93,6 +101,7 @@ class TroubleReport {
     'phone': phone,
     'address': address,
     'hasMaintenanceContract': hasMaintenanceContract,
+    'customerNumber': customerNumber,
     'description': description,
     'deviceModel': deviceModel,
     'manufacturer': manufacturer,
@@ -104,6 +113,7 @@ class TroubleReport {
     'urgencyLevel': urgencyLevel.name,
     'imagesPaths': imagesPaths,
     'isSynced': isSynced,
+    'hasAcceptedTerms': hasAcceptedTerms,
   };
 
   factory TroubleReport.fromJson(Map<String, dynamic> json) => TroubleReport(
@@ -114,6 +124,7 @@ class TroubleReport {
     phone: json['phone'],
     address: json['address'],
     hasMaintenanceContract: json['hasMaintenanceContract'] ?? false,
+    customerNumber: json['customerNumber'],
     description: json['description'],
     deviceModel: json['deviceModel'],
     manufacturer: json['manufacturer'],
@@ -127,5 +138,6 @@ class TroubleReport {
     urgencyLevel: UrgencyLevel.values.firstWhere((e) => e.name == json['urgencyLevel']),
     imagesPaths: List<String>.from(json['imagesPaths'] ?? []),
     isSynced: json['isSynced'] ?? false,
+    hasAcceptedTerms: json['hasAcceptedTerms'] ?? true,
   );
 } 

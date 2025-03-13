@@ -34,6 +34,7 @@ class TroubleReportViewModel extends BaseViewModel {
   final List<File> _images = [];
   Set<String> _energySources = {};
   bool _hasMaintenanceContract = false;
+  String? _customerNumber;
   String? _deviceModel;
   String? _manufacturer;
   String? _serialNumber;
@@ -42,6 +43,7 @@ class TroubleReportViewModel extends BaseViewModel {
   String? _serviceHistory;
   String? _previousIssues;
   UrgencyLevel _urgencyLevel = UrgencyLevel.medium;
+  bool _hasAcceptedTerms = false;
 
   /// Erstellt eine neue Instanz des TroubleReportViewModel
   TroubleReportViewModel(this._repository);
@@ -57,6 +59,7 @@ class TroubleReportViewModel extends BaseViewModel {
   List<String> get imagesPaths => List.unmodifiable(_imagesPaths);
   Set<String> get energySources => _energySources;
   bool get hasMaintenanceContract => _hasMaintenanceContract;
+  String? get customerNumber => _customerNumber;
   String? get deviceModel => _deviceModel;
   String? get manufacturer => _manufacturer;
   String? get serialNumber => _serialNumber;
@@ -65,11 +68,14 @@ class TroubleReportViewModel extends BaseViewModel {
   String? get serviceHistory => _serviceHistory;
   String? get previousIssues => _previousIssues;
   UrgencyLevel get urgencyLevel => _urgencyLevel;
+  bool get hasAcceptedTerms => _hasAcceptedTerms;
   
   /// Prüft, ob die Störungsmeldung gültig ist und gesendet werden kann
   bool get isValid => _name != null && _name!.isNotEmpty && 
                       _email != null && _email!.isNotEmpty && 
-                      _description != null && _description!.isNotEmpty;
+                      _description != null && _description!.isNotEmpty &&
+                      _hasAcceptedTerms &&
+                      (!_hasMaintenanceContract || (_customerNumber != null && _customerNumber!.isNotEmpty));
 
   /// Generische Setter-Methode für String-Felder
   /// 
@@ -89,6 +95,10 @@ class TroubleReportViewModel extends BaseViewModel {
       case 'description':
         if (_description != value) {
           _description = value;
+        }
+      case 'customerNumber':
+        if (_customerNumber != value) {
+          _customerNumber = value;
         }
       case 'deviceModel':
         if (_deviceModel != value) {
@@ -128,6 +138,7 @@ class TroubleReportViewModel extends BaseViewModel {
   void setPhone(String? value) => setStringField('phone', value);
   void setAddress(String? value) => setStringField('address', value);
   void setDescription(String? value) => setStringField('description', value);
+  void setCustomerNumber(String? value) => setStringField('customerNumber', value, notify: true);
   void setDeviceModel(String? value) => setStringField('deviceModel', value);
   void setManufacturer(String? value) => setStringField('manufacturer', value);
   void setSerialNumber(String? value) => setStringField('serialNumber', value);
@@ -157,6 +168,13 @@ class TroubleReportViewModel extends BaseViewModel {
   void setHasMaintenanceContract(bool value) {
     if (_hasMaintenanceContract != value) {
       _hasMaintenanceContract = value;
+      notifyListeners();
+    }
+  }
+
+  void setHasAcceptedTerms(bool value) {
+    if (_hasAcceptedTerms != value) {
+      _hasAcceptedTerms = value;
       notifyListeners();
     }
   }
@@ -197,6 +215,7 @@ class TroubleReportViewModel extends BaseViewModel {
       phone: _phone,
       address: _address,
       hasMaintenanceContract: _hasMaintenanceContract,
+      customerNumber: _customerNumber,
       description: _description ?? '',
       deviceModel: _deviceModel,
       manufacturer: _manufacturer,
@@ -207,6 +226,7 @@ class TroubleReportViewModel extends BaseViewModel {
       serviceHistory: _serviceHistory,
       urgencyLevel: _urgencyLevel,
       imagesPaths: _imagesPaths,
+      hasAcceptedTerms: _hasAcceptedTerms,
     );
   }
 
@@ -540,6 +560,7 @@ class TroubleReportViewModel extends BaseViewModel {
     _address = null;
     _hasMaintenanceContract = false;
     _description = null;
+    _customerNumber = null;
     _deviceModel = null;
     _manufacturer = null;
     _serialNumber = null;
@@ -549,6 +570,7 @@ class TroubleReportViewModel extends BaseViewModel {
     _serviceHistory = null;
     _previousIssues = null;
     _urgencyLevel = UrgencyLevel.medium;
+    _hasAcceptedTerms = false;
     _imagesPaths.clear();
     _images.clear();
     

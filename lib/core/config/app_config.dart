@@ -101,12 +101,11 @@ class AppConfig {
       if (!hasApiKey) {
         _log.info('Setze Entwicklungs-Standardwerte');
         
-        // Keine hartcodierten API-Schlüssel mehr
-        // Stattdessen leere Werte, die später gesetzt werden müssen
-        await setApiKey(ConfigKeys.mailjetApiKey, '');
-        await setApiKey(ConfigKeys.mailjetSecretKey, '');
-        await setApiKey(ConfigKeys.serviceEmail, '');
-        await setApiKey(ConfigKeys.senderEmail, '');
+        // Setze die Mailjet API-Schlüssel
+        await setApiKey(ConfigKeys.mailjetApiKey, '3004d543963be32f5dbe4da2329e109c');
+        await setApiKey(ConfigKeys.mailjetSecretKey, 'e28fd899034aba79be3b9bf6627f2621');
+        await setApiKey(ConfigKeys.serviceEmail, 'service@lebedew.de');
+        await setApiKey(ConfigKeys.senderEmail, 'julian.scherer@nextvision.agency');
         await setApiKey(ConfigKeys.senderName, 'Lebedew Haustechnik');
       }
     }

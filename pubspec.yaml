@@ -30,6 +30,8 @@ dependencies:
   url_launcher: ^6.2.2
   permission_handler: ^10.4.5
   package_info_plus: ^4.2.0
+  share_plus: ^7.2.1
+  cross_file: ^0.3.3+8
 
 dev_dependencies:
   flutter_test:

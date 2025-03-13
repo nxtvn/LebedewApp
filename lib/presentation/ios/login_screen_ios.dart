@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import '../../core/security/password_manager.dart';
 import '../../presentation/screens/trouble_report_screen.dart';
 import '../../presentation/screens/privacy_policy_screen.dart';
+import '../../core/logging/app_logger.dart';
 
 class LoginScreenIOS extends StatefulWidget {
   const LoginScreenIOS({Key? key}) : super(key: key);
@@ -13,18 +14,79 @@ class LoginScreenIOS extends StatefulWidget {
 class _LoginScreenIOSState extends State<LoginScreenIOS> {
   final _passwordController = TextEditingController();
   String _errorMessage = '';
+  bool _rememberPassword = false;
+  final _log = AppLogger.getLogger('LoginScreenIOS');
+
+  @override
+  void initState() {
+    super.initState();
+    _log.info('LoginScreenIOS initialisiert');
+    _checkForSavedPassword();
+  }
+
+  Future<void> _checkForSavedPassword() async {
+    _log.info('Prüfe auf gespeichertes Passwort');
+    
+    final isEnabled = await PasswordManager.isRememberPasswordEnabled();
+    if (isEnabled) {
+      _log.info('Passwort merken ist aktiviert');
+      
+      final savedPassword = await PasswordManager.getRememberedPassword();
+      if (savedPassword.isNotEmpty) {
+        _log.info('Gespeichertes Passwort gefunden');
+        
+        setState(() {
+          _passwordController.text = savedPassword;
+          _rememberPassword = true;
+        });
+      } else {
+        _log.info('Kein gespeichertes Passwort gefunden');
+      }
+    } else {
+      _log.info('Passwort merken ist deaktiviert');
+    }
+  }
 
   Future<void> _handleLogin() async {
-    final isValid = await PasswordManager.verifyPassword(_passwordController.text);
+    _log.info('Login-Versuch gestartet');
+    
+    final password = _passwordController.text;
+    
+    // Validiere das Passwort
+    if (password.isEmpty) {
+      _log.warning('Leeres Passwort eingegeben');
+      setState(() {
+        _errorMessage = 'Bitte geben Sie ein Passwort ein.';
+      });
+      return;
+    }
+    
+    _log.info('Überprüfe Passwort');
+    final isValid = await PasswordManager.verifyPassword(password);
     
     if (isValid) {
+      _log.info('Passwort korrekt, Login erfolgreich');
+      
+      // Speichere das Passwort, wenn "Passwort merken" aktiviert ist
+      if (_rememberPassword) {
+        _log.info('Speichere Passwort für "Passwort merken"');
+        await PasswordManager.saveRememberedPassword(password);
+      } else {
+        _log.info('Lösche gespeichertes Passwort');
+        await PasswordManager.clearRememberedPassword();
+      }
+      
       if (!mounted) return;
+      
+      _log.info('Navigiere zur Störungsmeldungs-Ansicht');
       Navigator.of(context).pushReplacement(
         CupertinoPageRoute(
           builder: (context) => const TroubleReportScreen(),
         ),
       );
     } else {
+      _log.warning('Falsches Passwort eingegeben');
+      
       setState(() {
         _errorMessage = 'Falsches Passwort. Bitte versuchen Sie es erneut.';
       });
@@ -94,6 +156,31 @@ class _LoginScreenIOSState extends State<LoginScreenIOS> {
                             ),
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      // "Passwort merken" Checkbox
+                      Semantics(
+                        label: 'Passwort merken',
+                        child: Row(
+                          children: [
+                            CupertinoSwitch(
+                              value: _rememberPassword,
+                              onChanged: (value) {
+                                setState(() {
+                                  _rememberPassword = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Passwort merken',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: CupertinoColors.label,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       Semantics(
                         label: 'Mit Passwort anmelden',
@@ -137,6 +224,7 @@ class _LoginScreenIOSState extends State<LoginScreenIOS> {
 
   @override
   void dispose() {
+    _log.info('LoginScreenIOS wird entfernt');
     _passwordController.dispose();
     super.dispose();
   }
