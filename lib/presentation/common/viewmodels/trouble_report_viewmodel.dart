@@ -67,6 +67,10 @@ class TroubleReportViewModel extends BaseViewModel {
   AppError? _lastError;
   AppError? get lastError => _lastError;
 
+  // Flag, das anzeigt, ob ein Validierungsversuch unternommen wurde
+  bool _validationAttempted = false;
+  bool get validationAttempted => _validationAttempted;
+
   /// Erstellt eine neue Instanz des TroubleReportViewModel
   TroubleReportViewModel(this._repository);
 
@@ -204,6 +208,14 @@ class TroubleReportViewModel extends BaseViewModel {
   void setOccurrenceDate(DateTime? value) {
     if (_occurrenceDate != value) {
       _occurrenceDate = value;
+      notifyListeners();
+    }
+  }
+
+  /// Kennzeichnet, dass ein Validierungsversuch unternommen wurde
+  void setValidationAttempted(bool value) {
+    if (_validationAttempted != value) {
+      _validationAttempted = value;
       notifyListeners();
     }
   }

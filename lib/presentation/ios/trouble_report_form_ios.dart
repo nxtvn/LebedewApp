@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,6 +12,7 @@ import '../../domain/entities/trouble_report.dart';
 import '../../domain/enums/request_type.dart';
 import '../../domain/enums/urgency_level.dart';
 import '../../core/logging/app_logger.dart';
+import 'dart:ui' show ImageFilter;
 
 class TroubleReportFormIOS extends TroubleReportForm {
   const TroubleReportFormIOS({
@@ -40,9 +41,6 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   late TroubleReportViewModel _viewModel;
   bool _isLoading = false;
   DateTime? _selectedDate;
-  
-  // Zähler für Bildauswahl-Fehler
-  int _imagePickErrorCount = 0;
   
   // Logger für diese Klasse
   final _log = AppLogger.getLogger('TroubleReportFormIOS');
@@ -191,107 +189,38 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   /// Wählt ein Bild aus der Kamera oder Galerie aus
   Future<void> _pickImage(ImageSource source) async {
-    final uniqueId = AppLogger.generateUniqueId();
-    final sourceStr = source == ImageSource.camera ? 'Kamera' : 'Galerie';
-    
-    AppLogger.logImagePickerWorkflow(
-      _log,
-      step: 'Start',
-      source: sourceStr,
-      uniqueId: uniqueId
+    // Ein iOS-konformes Loading-Overlay anzeigen
+    _showLoadingOverlay(
+      source == ImageSource.camera 
+          ? 'Kamera wird geöffnet...' 
+          : 'Galerie wird geöffnet...'
     );
     
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
-    
     try {
-      // Prüfe Berechtigungen
-      bool permissionGranted = false;
+      // Anfrage der entsprechenden Berechtigung
+      final permission = source == ImageSource.camera 
+          ? Permission.camera 
+          : Permission.photos;
       
-      if (source == ImageSource.camera) {
-        AppLogger.logImagePickerWorkflow(
-          _log,
-          step: 'Prüfe Kamera-Berechtigung',
-          source: sourceStr,
-          uniqueId: uniqueId
-        );
+      // Prüfe aktuellen Status
+      final permissionStatus = await permission.status;
+      
+      // Wenn Berechtigung nicht gewährt, anfragen
+      if (!permissionStatus.isGranted) {
+        final result = await permission.request();
         
-        final status = await Permission.camera.status;
-        
-        AppLogger.logPermissionStatus(
-          _log,
-          permission: 'Kamera',
-          status: status.toString()
-        );
-        
-        if (status.isDenied) {
-          final result = await Permission.camera.request();
-          permissionGranted = result.isGranted;
-          
-          AppLogger.logPermissionStatus(
-            _log,
-            permission: 'Kamera',
-            status: result.toString(),
-            userResponse: result.isGranted ? 'Erlaubt' : 'Verweigert'
-          );
-        } else {
-          permissionGranted = status.isGranted;
-        }
-      } else {
-        AppLogger.logImagePickerWorkflow(
-          _log,
-          step: 'Prüfe Fotos-Berechtigung',
-          source: sourceStr,
-          uniqueId: uniqueId
-        );
-        
-        final status = await Permission.photos.status;
-        
-        AppLogger.logPermissionStatus(
-          _log,
-          permission: 'Fotos',
-          status: status.toString()
-        );
-        
-        if (status.isDenied) {
-          final result = await Permission.photos.request();
-          permissionGranted = result.isGranted;
-          
-          AppLogger.logPermissionStatus(
-            _log,
-            permission: 'Fotos',
-            status: result.toString(),
-            userResponse: result.isGranted ? 'Erlaubt' : 'Verweigert'
-          );
-        } else {
-          permissionGranted = status.isGranted;
+        // Wenn Berechtigung verweigert, Dialog anzeigen und abbrechen
+        if (!result.isGranted) {
+          if (mounted) {
+            // Loading-Overlay schließen
+            Navigator.of(context).pop();
+            _showPermissionDeniedDialog(source);
+          }
+          return;
         }
       }
       
-      if (!permissionGranted) {
-        AppLogger.logImagePickerWorkflow(
-          _log,
-          step: 'Berechtigung verweigert',
-          source: sourceStr,
-          error: 'Benutzer hat Berechtigung verweigert',
-          uniqueId: uniqueId
-        );
-        
-        if (mounted) {
-          _showPermissionDeniedDialog(source);
-        }
-        return;
-      }
-      
-      // Wähle das Bild aus
-      AppLogger.logImagePickerWorkflow(
-        _log,
-        step: 'Öffne Bildauswahl',
-        source: sourceStr,
-        uniqueId: uniqueId
-      );
-      
+      // Bild auswählen
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(
         source: source,
@@ -300,118 +229,125 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         imageQuality: 85,
       );
       
+      // Loading-Overlay schließen
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      // Wenn keine Datei ausgewählt wurde, abbrechen
       if (pickedFile == null) {
-        AppLogger.logImagePickerWorkflow(
-          _log,
-          step: 'Abgebrochen',
-          source: sourceStr,
-          uniqueId: uniqueId
-        );
         return;
       }
       
-      final file = File(pickedFile.path);
-      final fileSize = await file.length();
+      // Neues Loading-Overlay für die Bildverarbeitung anzeigen
+      if (mounted) {
+        setState(() => _isLoading = true);
+        
+        // Datei zum ViewModel hinzufügen
+        final file = File(pickedFile.path);
+        _viewModel.addImagePath(file.path);
+      }
       
-      AppLogger.logImagePickerWorkflow(
-        _log,
-        step: 'Bild ausgewählt',
-        source: sourceStr,
-        filePath: pickedFile.path,
-        fileSize: fileSize,
-        uniqueId: uniqueId
-      );
-      
-      // Füge das Bild zum ViewModel hinzu
-      _viewModel.addImagePath(file.path);
-      
-      AppLogger.logImagePickerWorkflow(
-        _log,
-        step: 'Bild hinzugefügt',
-        source: sourceStr,
-        uniqueId: uniqueId
-      );
-      
-      // Setze den Fehlerzähler zurück
-      _imagePickErrorCount = 0;
     } catch (e) {
-      AppLogger.logImagePickerWorkflow(
-        _log,
-        step: 'Fehler',
-        source: sourceStr,
-        error: e.toString(),
-        uniqueId: uniqueId
-      );
-      
-      // Erhöhe den Fehlerzähler
-      _imagePickErrorCount++;
-      
-      // Detaillierte Fehlerbehandlung
+      // Fehlerbehandlung
       String errorMessage = 'Fehler beim Auswählen des Bildes';
       
       if (e is PlatformException) {
-        _log.warning('PlatformException: ${e.code} - ${e.message}');
-        
         switch (e.code) {
           case 'camera_access_denied':
-            errorMessage = 'Kamerazugriff verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
-            break;
           case 'photo_access_denied':
-            errorMessage = 'Zugriff auf Fotos verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
-            break;
           case 'permission_denied':
-            errorMessage = 'Berechtigung verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
+            errorMessage = 'Zugriff verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
             break;
           default:
-            errorMessage = 'Fehler: ${e.message}';
+            errorMessage = 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
         }
       }
       
-      // Zeige Fehlermeldung an
+      // Loading-Overlay schließen
       if (mounted) {
+        // Sicherstellen, dass das Overlay nicht zweimal geschlossen wird
+        try {
+          Navigator.of(context).pop();
+        } catch (_) {}
+        
         _showErrorDialog(errorMessage);
       }
       
-      // Fallback-Mechanismus: Biete alternative Methode an
-      if (mounted && source == ImageSource.camera) {
-        _offerAlternativeMethod();
-      }
-      
-      // Wenn mehrere Fehler aufgetreten sind, zeige die manuelle Upload-Option an
-      if (_imagePickErrorCount >= 2 && mounted) {
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            _showManualUploadOption();
-          }
-        });
-      }
     } finally {
+      // Loading-Status zurücksetzen
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
+  
+  /// Zeigt ein iOS-konformes Loading-Overlay an
+  void _showLoadingOverlay(String message) {
+    showCupertinoModalPopup(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Container(
+          color: CupertinoColors.systemBackground.withAlpha(127),
+          child: Center(
+            child: Container(
+              width: 200,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground.resolveFrom(context),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: CupertinoColors.systemGrey4.withAlpha(76),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CupertinoActivityIndicator(radius: 15),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: CupertinoColors.label,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   /// Zeigt einen Dialog an, wenn Berechtigungen fehlen
   void _showPermissionDeniedDialog(ImageSource source) {
-    _log.warning('Zeige Dialog: Berechtigung verweigert für ${source == ImageSource.camera ? "Kamera" : "Galerie"}');
+    const String title = 'Berechtigung erforderlich';
+    final String message = source == ImageSource.camera
+        ? 'Um ein Foto aufzunehmen, benötigt die App Zugriff auf Ihre Kamera.'
+        : 'Um ein Bild auszuwählen, benötigt die App Zugriff auf Ihre Fotos.';
     
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Berechtigung erforderlich'),
-        content: Text(
-          source == ImageSource.camera
-              ? 'Für die Verwendung der Kamera wird eine Berechtigung benötigt. Bitte erlauben Sie den Zugriff in den Einstellungen.'
-              : 'Für den Zugriff auf Ihre Fotos wird eine Berechtigung benötigt. Bitte erlauben Sie den Zugriff in den Einstellungen.'
-        ),
+        title: const Text(title),
+        content: Text(message),
         actions: [
           CupertinoDialogAction(
+            isDefaultAction: true,
             child: const Text('Abbrechen'),
             onPressed: () => Navigator.of(context).pop(),
           ),
           CupertinoDialogAction(
-            child: const Text('Einstellungen öffnen'),
+            child: const Text('Einstellungen'),
             onPressed: () {
               Navigator.of(context).pop();
               openAppSettings();
@@ -422,15 +358,16 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     );
   }
 
-  /// Zeigt eine Fehlermeldung an
+  /// Zeigt eine einfache Fehlermeldung an
   void _showErrorDialog(String message) {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Fehler'),
+        title: const Text('Hinweis'),
         content: Text(message),
         actions: [
           CupertinoDialogAction(
+            isDefaultAction: true,
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -439,143 +376,229 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     );
   }
 
-  /// Bietet eine alternative Methode an, wenn die Kamera nicht funktioniert
-  void _offerAlternativeMethod() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Alternative Methode'),
-        content: const Text('Möchten Sie stattdessen ein Bild aus der Galerie auswählen?'),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Nein'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          CupertinoDialogAction(
-            child: const Text('Ja, Galerie öffnen'),
-            onPressed: () {
-              Navigator.of(context).pop();
-              _pickImage(ImageSource.gallery);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Fallback-Methode für Bildupload, wenn normale Methoden fehlschlagen
-  void _showManualUploadOption() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Alternative Methode'),
-        content: const Text(
-          'Wenn Sie Probleme beim Hochladen von Bildern haben, können Sie uns die Bilder auch per E-Mail senden. '
-          'Bitte geben Sie dabei Ihre Referenznummer an, die Sie nach dem Absenden der Störungsmeldung erhalten.'
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Verstanden'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showDatePicker() {
-    showCupertinoModalPopup(
+    // SystemUI-Farbe für iOS-Look
+    final backgroundColor = CupertinoTheme.of(context).scaffoldBackgroundColor;
+    final textColor = CupertinoTheme.of(context).textTheme.textStyle.color;
+    
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) => Container(
-        height: 300,
-        padding: const EdgeInsets.only(top: 6.0),
-        margin: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    child: const Text('Abbrechen'),
-                    onPressed: () => Navigator.of(context).pop(),
+      // Volle Animation für iOS-Design
+      barrierDismissible: true,
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Hintergrund-Blur
+      semanticsDismissible: true,
+      builder: (BuildContext context) {
+        return Container(
+          height: 320,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
+            ),
+          ),
+          // Verwendet SafeArea um Notches und andere Einschnitte zu respektieren
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                // iOS-übliche Titelleiste mit Griff
+                Container(
+                  height: 6,
+                  width: 40,
+                  margin: const EdgeInsets.only(top: 8, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey4.resolveFrom(context),
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                  CupertinoButton(
-                    child: const Text('Bestätigen'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _viewModel.setOccurrenceDate(_selectedDate);
+                ),
+                
+                // Titel und Buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text(
+                          'Abbrechen',
+                          style: TextStyle(
+                            color: CupertinoColors.systemBlue,
+                            fontSize: 17,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Datum wählen',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                          color: textColor,
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text(
+                          'Fertig',
+                          style: TextStyle(
+                            color: CupertinoColors.activeBlue,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Trennlinie
+                Container(
+                  height: 0.5,
+                  color: CupertinoColors.separator.resolveFrom(context),
+                ),
+                
+                // Date Picker
+                Expanded(
+                  child: CupertinoDatePicker(
+                    backgroundColor: backgroundColor,
+                    initialDateTime: _selectedDate ?? DateTime.now(),
+                    maximumDate: DateTime.now(),
+                    minimumDate: DateTime(2000),
+                    mode: CupertinoDatePickerMode.date,
+                    use24hFormat: true, // Für deutsche Konvention
+                    dateOrder: DatePickerDateOrder.dmy, // Europäisches Format
+                    onDateTimeChanged: (DateTime newDateTime) {
+                      setState(() {
+                        _selectedDate = newDateTime;
+                        // Sofort ViewModel aktualisieren für reaktiveres Verhalten
+                        _viewModel.setOccurrenceDate(newDateTime);
+                      });
                     },
                   ),
-                ],
-              ),
-              const Divider(height: 0),
-              Expanded(
-                child: CupertinoDatePicker(
-                  initialDateTime: _selectedDate ?? DateTime.now(),
-                  maximumDate: DateTime.now(),
-                  minimumDate: DateTime(2000),
-                  mode: CupertinoDatePickerMode.date,
-                  onDateTimeChanged: (DateTime newDateTime) {
-                    setState(() => _selectedDate = newDateTime);
-                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
 
   Widget _buildImagePreview(BuildContext context, int index) {
     final bool isGridView = MediaQuery.of(context).size.width < 400;
+    final double imageSize = isGridView ? 130 : 140;
     
-    return Stack(
-      children: [
-        Container(
-          margin: EdgeInsets.only(
-            right: isGridView ? 0 : 8,
-          ),
-          decoration: BoxDecoration(
-            border: Border.all(color: CupertinoColors.systemGrey4),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              _viewModel.images[index],
-              fit: BoxFit.cover,
-              width: isGridView ? null : 120,
-              height: 120,
+    return Padding(
+      padding: const EdgeInsets.only(
+        right: 12,
+        bottom: 4,
+      ),
+      child: Container(
+        width: imageSize,
+        height: imageSize,
+        decoration: BoxDecoration(
+          color: CupertinoColors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: CupertinoColors.systemGrey5.withAlpha(127),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Bild
+              Image.file(
+                _viewModel.images[index],
+                fit: BoxFit.cover,
+              ),
+              
+              // Abgedunkelter Overlay am oberen Rand für besseren Kontrast
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        CupertinoColors.black.withAlpha(102),
+                        CupertinoColors.black.withAlpha(0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Lösch-Button
+              Positioned(
+                top: 8,
+                right: 8,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: 0,
+                  onPressed: () => _viewModel.removeImage(index),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: CupertinoColors.black.withAlpha(25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 14,
+                        color: CupertinoColors.systemRed,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Bildindex-Anzeige
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.black.withAlpha(153),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${index + 1}/${_viewModel.images.length}',
+                    style: const TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        Positioned(
-          top: 4,
-          right: isGridView ? 4 : 12,
-          child: GestureDetector(
-            onTap: () => _viewModel.removeImage(index),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: CupertinoColors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                CupertinoIcons.clear_circled_solid,
-                size: 16,
-                color: CupertinoColors.systemRed,
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -600,8 +623,8 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           _buildUrgencySection(),
           SizedBox(height: padding / 2),
           _buildTermsSection(),
-          SizedBox(height: padding),
-          _buildSubmitButton(),
+          // SizedBox(height: padding),
+          // _buildSubmitButton(), // Submit-Button entfernt
         ],
       ),
     );
@@ -617,93 +640,132 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   List<Widget> _buildRequestTypeOptions() {
-    final Map<RequestType, Widget> requestTypeSegments = <RequestType, Widget>{};
+    List<Widget> options = [];
     
+    // Eine Liste von Optionen für jeden RequestType erstellen
     for (var type in RequestType.values) {
-      requestTypeSegments[type] = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _getIconForRequestType(type),
-              color: _viewModel.type == type 
-                  ? CupertinoColors.white 
-                  : CupertinoColors.activeBlue,
-              size: 20,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              type.label,
-              style: TextStyle(
-                fontSize: 12,
+      options.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: GestureDetector(
+            onTap: () => _viewModel.setType(type),
+            child: Container(
+              decoration: BoxDecoration(
                 color: _viewModel.type == type 
-                    ? CupertinoColors.white 
-                    : CupertinoColors.label.resolveFrom(context),
+                    ? CupertinoColors.activeBlue.withOpacity(0.1)
+                    : CupertinoColors.systemBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _viewModel.type == type
+                      ? CupertinoColors.activeBlue
+                      : CupertinoColors.systemGrey4.resolveFrom(context),
+                  width: _viewModel.type == type ? 2 : 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _viewModel.type == type
+                            ? CupertinoColors.activeBlue
+                            : CupertinoColors.systemGrey6,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          _getIconForRequestType(type),
+                          color: _viewModel.type == type
+                              ? CupertinoColors.white
+                              : CupertinoColors.activeBlue,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            type.label,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: _viewModel.type == type
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _viewModel.type == type
+                                  ? CupertinoColors.activeBlue
+                                  : CupertinoColors.label.resolveFrom(context),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _getDescriptionForRequestType(type),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      _viewModel.type == type
+                          ? CupertinoIcons.checkmark_circle_fill
+                          : CupertinoIcons.circle,
+                      color: _viewModel.type == type
+                          ? CupertinoColors.activeBlue
+                          : CupertinoColors.systemGrey4,
+                      size: 24,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       );
     }
     
-    return [
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: CupertinoFormRow(
-          child: CupertinoSegmentedControl<RequestType>(
-            children: requestTypeSegments,
-            groupValue: _viewModel.type,
-            onValueChanged: (RequestType value) {
-              _viewModel.setType(value);
-            },
-            padding: const EdgeInsets.all(4),
+    // Füge eine Beschreibung für den ausgewählten Typ hinzu
+    options.add(
+      Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemGrey6.resolveFrom(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: CupertinoColors.systemGrey4.resolveFrom(context),
           ),
         ),
-      ),
-      CupertinoFormRow(
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemGrey6.resolveFrom(context),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: CupertinoColors.systemGrey4.resolveFrom(context),
+        child: Row(
+          children: [
+            const Icon(
+              CupertinoIcons.info_circle,
+              color: CupertinoColors.activeBlue,
+              size: 20,
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    _getIconForRequestType(_viewModel.type),
-                    color: CupertinoColors.activeBlue,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _viewModel.type.label,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: CupertinoColors.activeBlue,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _getDescriptionForRequestType(_viewModel.type),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Bitte wählen Sie die Art Ihres Anliegens aus. Dies hilft uns, Ihre Anfrage richtig zu bearbeiten.',
                 style: TextStyle(
-                  fontSize: 13,
-                  color: CupertinoColors.label.resolveFrom(context),
+                  fontSize: 14,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    ];
+    );
+    
+    return options;
   }
 
   // Hilfsmethode, um das passende Icon für jeden RequestType zu erhalten
@@ -744,6 +806,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             controller: _phoneController,
             placeholder: 'Telefonnummer eingeben',
             keyboardType: TextInputType.phone,
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Bitte geben Sie Ihre Telefonnummer ein';
@@ -755,10 +818,14 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         ),
         CupertinoFormRow(
           prefix: const Text('Adresse'),
-          child: CupertinoTextFormFieldRow(
-            controller: _addressController,
-            placeholder: 'Adresse eingeben',
-            maxLines: 2,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 80),
+            child: CupertinoTextFormFieldRow(
+              controller: _addressController,
+              placeholder: 'Adresse eingeben',
+              maxLines: 3,
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+            ),
           ),
         ),
       ],
@@ -766,50 +833,48 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   Widget _buildNameField() {
-    return Semantics(
-      label: 'Name Eingabefeld',
-      hint: 'Geben Sie Ihren vollständigen Namen ein',
-      child: CupertinoTextFormFieldRow(
-        controller: _nameController,
-        prefix: const Text('Name'),
-        placeholder: 'Ihr vollständiger Name',
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Bitte geben Sie Ihren Namen ein';
-          }
-          return null;
-        },
-        decoration: BoxDecoration(
-          border: Border.all(color: CupertinoColors.systemGrey4),
-          borderRadius: BorderRadius.circular(8),
+    return CupertinoFormRow(
+      prefix: const Text('Name *'),
+      child: Semantics(
+        label: 'Name Eingabefeld',
+        hint: 'Geben Sie Ihren vollständigen Namen ein',
+        child: CupertinoTextFormFieldRow(
+          controller: _nameController,
+          placeholder: 'Ihr vollständiger Name',
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Bitte geben Sie Ihren Namen ein';
+            }
+            return null;
+          },
+          autovalidateMode: AutovalidateMode.onUserInteraction,
         ),
       ),
     );
   }
 
   Widget _buildEmailField() {
-    return Semantics(
-      label: 'E-Mail Eingabefeld',
-      hint: 'Geben Sie Ihre E-Mail-Adresse ein',
-      child: CupertinoTextFormFieldRow(
-        controller: _emailController,
-        prefix: const Text('E-Mail'),
-        placeholder: 'Ihre E-Mail-Adresse',
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        keyboardType: TextInputType.emailAddress,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
-          }
-          if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
-            return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
-          }
-          return null;
-        },
-        decoration: BoxDecoration(
-          border: Border.all(color: CupertinoColors.systemGrey4),
-          borderRadius: BorderRadius.circular(8),
+    return CupertinoFormRow(
+      prefix: const Text('E-Mail *'),
+      child: Semantics(
+        label: 'E-Mail Eingabefeld',
+        hint: 'Geben Sie Ihre E-Mail-Adresse ein',
+        child: CupertinoTextFormFieldRow(
+          controller: _emailController,
+          placeholder: 'Ihre E-Mail-Adresse',
+          keyboardType: TextInputType.emailAddress,
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
+            }
+            if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
+              return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
+            }
+            return null;
+          },
+          autovalidateMode: AutovalidateMode.onUserInteraction,
         ),
       ),
     );
@@ -826,6 +891,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           child: CupertinoTextFormFieldRow(
             controller: _deviceModelController,
             placeholder: 'Modellbezeichnung',
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
           ),
         ),
         CupertinoFormRow(
@@ -833,6 +899,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           child: CupertinoTextFormFieldRow(
             controller: _manufacturerController,
             placeholder: 'Herstellername',
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
           ),
         ),
         CupertinoFormRow(
@@ -840,6 +907,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           child: CupertinoTextFormFieldRow(
             controller: _serialNumberController,
             placeholder: 'Seriennummer',
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
           ),
         ),
         CupertinoFormRow(
@@ -847,14 +915,19 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           child: CupertinoTextFormFieldRow(
             controller: _errorCodeController,
             placeholder: 'Falls vorhanden',
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
           ),
         ),
         CupertinoFormRow(
           prefix: const Text('Servicehistorie'),
-          child: CupertinoTextFormFieldRow(
-            controller: _serviceHistoryController,
-            placeholder: 'Letzte Wartungen',
-            maxLines: 3,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 100),
+            child: CupertinoTextFormFieldRow(
+              controller: _serviceHistoryController,
+              placeholder: 'Letzte Wartungen',
+              maxLines: 4,
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+            ),
           ),
         ),
         Consumer<TroubleReportViewModel>(
@@ -903,6 +976,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                 controller: _customerNumberController,
                 placeholder: 'Kundennummer eingeben',
                 keyboardType: TextInputType.text,
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
                 validator: (value) {
                   if (viewModel.hasMaintenanceContract && (value == null || value.isEmpty)) {
                     return 'Bitte geben Sie Ihre Kundennummer ein';
@@ -925,17 +999,21 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
       margin: _getResponsiveMargin(context),
       children: [
         CupertinoFormRow(
-          child: CupertinoTextFormFieldRow(
-            controller: _descriptionController,
-            placeholder: 'Problem beschreiben',
-            maxLines: 5,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Bitte beschreiben Sie das Problem';
-              }
-              return null;
-            },
-            autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 120),
+            child: CupertinoTextFormFieldRow(
+              controller: _descriptionController,
+              placeholder: 'Problem beschreiben',
+              maxLines: 6,
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Bitte beschreiben Sie das Problem';
+                }
+                return null;
+              },
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+            ),
           ),
         ),
         CupertinoFormRow(
@@ -969,52 +1047,118 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             ),
           ),
         ),
+        // Verbesserte iOS-konforme Ladeanzeige für Bildverarbeitung
         if (_isLoading)
-          const CupertinoFormRow(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Column(
-                  children: [
-                    CupertinoActivityIndicator(),
-                    SizedBox(height: 8),
-                    Text(
-                      'Bild wird verarbeitet...',
-                      style: TextStyle(
-                        fontSize: 12,
+          CupertinoFormRow(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemGrey6.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: CupertinoColors.systemGrey4.resolveFrom(context),
+                  width: 0.5,
+                ),
+              ),
+              child: Column(
+                children: [
+                  // iOS-typischer Ladeindikator
+                  const CupertinoActivityIndicator(radius: 14),
+                  const SizedBox(height: 12),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.photo,
+                        size: 16,
                         color: CupertinoColors.systemGrey,
                       ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Bild wird verarbeitet...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: CupertinoColors.systemGrey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Bitte warten',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
+
+        // Verbesserte iOS-konforme Bildergalerie
         Consumer<TroubleReportViewModel>(
           builder: (context, viewModel, _) {
             if (viewModel.images.isEmpty) {
               return const SizedBox.shrink();
             }
+            
             return CupertinoFormRow(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8.0),
-                    child: Text(
-                      'Ausgewählte Bilder:',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              CupertinoIcons.photo_on_rectangle,
+                              color: CupertinoColors.activeBlue,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Ausgewählte Bilder (${viewModel.images.length})',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: CupertinoColors.activeBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minSize: 0,
+                          onPressed: _isLoading ? null : _showImagePickerOptions,
+                          child: const Text(
+                            'Mehr hinzufügen',
+                            style: TextStyle(
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  
+                  // Verbesserte Bildvorschau-Galerie mit iOS-konformem Scrollverhalten
                   SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: viewModel.images.length,
-                      itemBuilder: _buildImagePreview,
+                    height: 150,
+                    child: CupertinoScrollbar(
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: viewModel.images.length,
+                        itemBuilder: _buildImagePreview,
+                        padding: const EdgeInsets.only(right: 12, bottom: 8),
+                      ),
                     ),
                   ),
                 ],
@@ -1131,9 +1275,31 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   Widget _buildTermsSection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Zustimmung'),
-      footer: const Text('Bitte stimmen Sie den Nutzungsbedingungen zu, um fortzufahren.'),
+      header: const Text(
+        'Nutzungsbedingungen',
+        style: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+          letterSpacing: -0.1,
+          color: CupertinoColors.secondaryLabel,
+        ),
+      ),
+      footer: const Padding(
+        padding: EdgeInsets.only(top: 4.0),
+        child: Text(
+          'Ihre Zustimmung ist erforderlich, um die Störungsmeldung einzureichen.',
+          style: TextStyle(
+            fontSize: 13,
+            color: CupertinoColors.secondaryLabel,
+            height: 1.3,
+          ),
+        ),
+      ),
       margin: _getResponsiveMargin(context),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
       children: [
         _buildTermsAcceptanceRow(),
       ],
@@ -1141,153 +1307,112 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   Widget _buildTermsAcceptanceRow() {
-    return Semantics(
-      label: 'Allgemeine Geschäftsbedingungen akzeptieren',
-      hint: 'Aktivieren Sie die Checkbox, um die AGBs zu akzeptieren',
-      child: Row(
+    // Ermittle, ob wir Fehler anzeigen sollen
+    final bool showError = !_viewModel.hasAcceptedTerms && _viewModel.validationAttempted;
+    
+    // Link-Farbe für den AGB-Text
+    const linkColor = CupertinoColors.activeBlue;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CupertinoCheckbox(
-            value: _viewModel.hasAcceptedTerms,
-            onChanged: (value) {
-              if (value != null) {
-                _viewModel.setHasAcceptedTerms(value);
-              }
-            },
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _viewModel.setHasAcceptedTerms(!_viewModel.hasAcceptedTerms),
-              child: Text(
-                'Ich habe die Allgemeinen Geschäftsbedingungen gelesen und akzeptiere sie',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: CupertinoColors.label.resolveFrom(context),
-                ),
+          // Ein größeres Touch-Target für bessere Benutzererfahrung
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            pressedOpacity: 0.7,
+            onPressed: () => _viewModel.setHasAcceptedTerms(!_viewModel.hasAcceptedTerms),
+            child: Semantics(
+              label: 'Allgemeine Geschäftsbedingungen akzeptieren',
+              hint: 'Tippen Sie hier, um die Nutzungsbedingungen zu akzeptieren',
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Besseres Checkbox-Design mit größerem Touch-Target
+                  Container(
+                    width: 30,
+                    height: 44,
+                    alignment: Alignment.center,
+                    child: CupertinoCheckbox(
+                      value: _viewModel.hasAcceptedTerms,
+                      onChanged: (value) {
+                        if (value != null) {
+                          _viewModel.setHasAcceptedTerms(value);
+                        }
+                      },
+                      activeColor: CupertinoColors.activeBlue,
+                      // fillColor als WidgetStateProperty anstelle von MaterialStateProperty verwenden
+                      fillColor: WidgetStateProperty.resolveWith<Color>((states) => 
+                        showError ? CupertinoColors.systemRed : CupertinoColors.systemGrey3
+                      ),
+                    ),
+                  ),
+                  
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12.0),
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 16,
+                            height: 1.3,
+                            color: showError 
+                                ? CupertinoColors.systemRed
+                                : CupertinoColors.label.resolveFrom(context),
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'Ich akzeptiere die ',
+                            ),
+                            TextSpan(
+                              text: 'Nutzungsbedingungen',
+                              style: const TextStyle(
+                                color: linkColor,
+                                fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  _showTermsAndConditions();
+                                },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-
-  /// Zeigt einen Validierungsfehler-Dialog an
-  void _showValidationErrorDialog() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Eingabefehler'),
-        content: Semantics(
-          label: 'Formularvalidierungsfehler',
-          liveRegion: true,
-          child: const Text('Bitte füllen Sie alle erforderlichen Felder korrekt aus.'),
-        ),
-        actions: [
-          Semantics(
-            label: 'Verstanden',
-            hint: 'Schließt diese Fehlermeldung',
-            button: true,
-            child: CupertinoDialogAction(
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Zeigt einen Fehler-Dialog für nicht akzeptierte AGBs an
-  void _showTermsNotAcceptedError() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('AGBs nicht akzeptiert'),
-        content: Semantics(
-          label: 'AGBs Validierungsfehler',
-          liveRegion: true,
-          child: const Text('Bitte akzeptieren Sie die Allgemeinen Geschäftsbedingungen, um fortzufahren.'),
-        ),
-        actions: [
-          Semantics(
-            label: 'Verstanden',
-            hint: 'Schließt diese Fehlermeldung',
-            button: true,
-            child: CupertinoDialogAction(
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Füge diese Methode zur Validierung und Übermittlung des Formulars hinzu
-  void _validateAndSubmit(TroubleReportViewModel viewModel) {
-    if (widget.formKey.currentState?.validate() ?? false) {
-      widget.formKey.currentState?.save();
-      
-      // Prüfe, ob die AGBs akzeptiert wurden
-      if (!viewModel.hasAcceptedTerms) {
-        _showTermsNotAcceptedError();
-        return;
-      }
-      
-      // Erstelle TroubleReport-Objekt
-      final report = TroubleReport(
-        type: viewModel.type,
-        name: viewModel.name ?? '',
-        email: viewModel.email ?? '',
-        phone: viewModel.phone ?? '',
-        address: viewModel.address,
-        hasMaintenanceContract: viewModel.hasMaintenanceContract,
-        customerNumber: viewModel.customerNumber,
-        description: viewModel.description ?? '',
-        deviceModel: viewModel.deviceModel,
-        manufacturer: viewModel.manufacturer,
-        serialNumber: viewModel.serialNumber,
-        errorCode: viewModel.errorCode,
-        energySources: viewModel.energySources,
-        occurrenceDate: viewModel.occurrenceDate,
-        serviceHistory: viewModel.serviceHistory,
-        urgencyLevel: viewModel.urgencyLevel,
-        imagesPaths: viewModel.imagesPaths,
-        hasAcceptedTerms: viewModel.hasAcceptedTerms,
-      );
-      
-      // Sende den Bericht
-      widget.onSubmit(report);
-    } else {
-      _showValidationErrorDialog();
-    }
-  }
-
-  Widget _buildSubmitButton() {
-    return Semantics(
-      label: 'Störungsmeldung absenden',
-      hint: 'Sendet das ausgefüllte Formular ab',
-      button: true,
-      enabled: !_isLoading,
-      child: CupertinoButton.filled(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        onPressed: _isLoading ? null : () => _validateAndSubmit(_viewModel),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(CupertinoIcons.paperplane, size: 18),
-            SizedBox(width: 8),
-            Text(
-              'Störungsmeldung absenden',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+          
+          // Verbesserte Fehlermeldung mit besserem Styling
+          if (showError)
+            const Padding(
+              padding: EdgeInsets.only(left: 30.0, top: 4.0, right: 16.0),
+              child: Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.exclamationmark_circle,
+                    size: 14,
+                    color: CupertinoColors.systemRed,
+                  ),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Bitte stimmen Sie den Nutzungsbedingungen zu',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: CupertinoColors.systemRed,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1308,4 +1433,64 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
       vertical: 8.0
     );
   }
-} 
+
+  void _showTermsAndConditions() {
+    showCupertinoModalPopup(
+      context: context,
+      filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+      builder: (BuildContext context) {
+        return CupertinoActionSheet(
+          title: const Text(
+            'Nutzungsbedingungen',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          message: Container(
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: const CupertinoScrollbar(
+              child: SingleChildScrollView(
+                physics: BouncingScrollPhysics(),
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Die folgenden Nutzungsbedingungen regeln die Verwendung unseres Störungsmeldungsformulars. '
+                  'Durch die Nutzung unserer Dienste erklären Sie sich mit diesen Bedingungen einverstanden.\n\n'
+                  '1. Datenschutz und Vertraulichkeit\n'
+                  'Wir behandeln Ihre persönlichen Daten mit größter Sorgfalt und Vertraulichkeit. Ihre Daten werden ausschließlich zum Zweck der Bearbeitung Ihrer Störungsmeldung verwendet.\n\n'
+                  '2. Datenverarbeitung\n'
+                  'Mit dem Absenden des Formulars stimmen Sie zu, dass wir Ihre angegebenen Daten zur Bearbeitung Ihrer Störungsmeldung verarbeiten dürfen.\n\n'
+                  '3. Verantwortung\n'
+                  'Sie versichern, dass alle von Ihnen gemachten Angaben wahrheitsgemäß und vollständig sind.\n\n'
+                  '4. Bilder und Dateien\n'
+                  'Falls Sie Bilder oder Dateien hochladen, stellen Sie sicher, dass diese keine urheberrechtlich geschützten Inhalte enthalten, es sei denn, Sie besitzen die entsprechenden Rechte.\n\n'
+                  '5. Bearbeitung\n'
+                  'Wir bemühen uns, Ihre Störungsmeldung zeitnah zu bearbeiten, können jedoch keine verbindlichen Bearbeitungszeiten garantieren.',
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.4,
+                    color: CupertinoColors.label,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            CupertinoActionSheetAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+                _viewModel.setHasAcceptedTerms(true);
+              },
+              child: const Text('Akzeptieren'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Schließen'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
