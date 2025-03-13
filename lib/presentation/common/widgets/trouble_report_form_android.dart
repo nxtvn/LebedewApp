@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import '../../../domain/entities/trouble_report.dart';
 import '../../../domain/enums/request_type.dart';
 import '../../../domain/enums/urgency_level.dart';
+import '../../../core/constants/design_constants.dart';
 import '../viewmodels/trouble_report_viewmodel.dart';
+import 'trouble_report_form.dart';
 
 class TroubleReportFormAndroid extends StatefulWidget {
-  const TroubleReportFormAndroid({Key? key}) : super(key: key);
+  final GlobalKey<FormState>? formKey;
+
+  const TroubleReportFormAndroid({Key? key, this.formKey}) : super(key: key);
 
   @override
   State<TroubleReportFormAndroid> createState() => _TroubleReportFormAndroidState();
 }
 
-class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
-  final _formKey = GlobalKey<FormState>();
+class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> with TroubleReportFormResetMixin {
+  late final GlobalKey<FormState> _formKey;
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -32,6 +36,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
   @override
   void initState() {
     super.initState();
+    _formKey = widget.formKey ?? GlobalKey<FormState>();
     _viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
     _initControllers();
   }
@@ -74,6 +79,21 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
     _errorCodeController.dispose();
     _serviceHistoryController.dispose();
     super.dispose();
+  }
+
+  @override
+  void reset() {
+    _nameController.clear();
+    _emailController.clear();
+    _phoneController.clear();
+    _addressController.clear();
+    _descriptionController.clear();
+    _deviceModelController.clear();
+    _manufacturerController.clear();
+    _serialNumberController.clear();
+    _errorCodeController.clear();
+    _serviceHistoryController.clear();
+    _viewModel.reset();
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -233,7 +253,6 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
               builder: (context, viewModel, _) {
                 return Column(
                   children: RequestType.values.map((type) {
-                    final isSelected = viewModel.type == type;
                     return RadioListTile<RequestType>(
                       title: Text(type.label),
                       value: type,
@@ -575,13 +594,13 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
               builder: (context, viewModel, _) {
                 return Row(
                   children: UrgencyLevel.values.map((level) {
-                    Color color;
-                    IconData icon;
+                    Color color = Colors.blue;
+                    IconData icon = Icons.info;
                     
                     switch (level) {
                       case UrgencyLevel.low:
                         color = Colors.green;
-                        icon = Icons.check_circle;
+                        icon = Icons.info;
                         break;
                       case UrgencyLevel.medium:
                         color = Colors.orange;
@@ -598,7 +617,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
                         onTap: () => viewModel.setUrgencyLevel(level),
                         child: Card(
                           color: viewModel.urgencyLevel == level
-                              ? color.withOpacity(0.1)
+                              ? color.withAlpha(DesignConstants.lowOpacityAlpha)
                               : null,
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
@@ -634,25 +653,28 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
                   return const SizedBox.shrink();
                 }
                 
-                Color color;
-                switch (viewModel.urgencyLevel!) {
-                  case UrgencyLevel.low:
-                    color = Colors.green;
-                    break;
-                  case UrgencyLevel.medium:
-                    color = Colors.orange;
-                    break;
-                  case UrgencyLevel.high:
-                    color = Colors.red;
-                    break;
+                Color color = Colors.blue;
+                final urgencyLevel = viewModel.urgencyLevel;
+                if (urgencyLevel != null) {
+                  switch (urgencyLevel) {
+                    case UrgencyLevel.low:
+                      color = Colors.green;
+                      break;
+                    case UrgencyLevel.medium:
+                      color = Colors.orange;
+                      break;
+                    case UrgencyLevel.high:
+                      color = Colors.red;
+                      break;
+                  }
                 }
                 
                 return Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withAlpha(DesignConstants.lowOpacityAlpha),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: color.withOpacity(0.3)),
+                    border: Border.all(color: color.withAlpha(DesignConstants.mediumOpacityAlpha)),
                   ),
                   child: Text(
                     viewModel.urgencyLevel!.description,

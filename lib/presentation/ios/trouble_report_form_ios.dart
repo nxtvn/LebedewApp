@@ -1,26 +1,38 @@
 import 'package:flutter/cupertino.dart';
 import '../../domain/entities/trouble_report.dart';
+import '../../domain/enums/request_type.dart';
+import '../../domain/enums/urgency_level.dart';
+import '../common/widgets/trouble_report_form.dart';
 
 class TroubleReportFormIOS extends StatefulWidget {
   final GlobalKey<FormState> formKey;
-  final Function(TroubleReport) onSubmit;
+  final Function(TroubleReport)? onSubmit;
 
   const TroubleReportFormIOS({
     super.key,
     required this.formKey,
-    required this.onSubmit,
+    this.onSubmit,
   });
 
   @override
   State<TroubleReportFormIOS> createState() => _TroubleReportFormIOSState();
 }
 
-class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> {
+class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with TroubleReportFormResetMixin {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  @override
+  void reset() {
+    _nameController.clear();
+    _emailController.clear();
+    _phoneController.clear();
+    _addressController.clear();
+    _descriptionController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +66,9 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> {
                     if (value == null || value.isEmpty) {
                       return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
                     }
-                    // TODO: Add email validation logic
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
+                    }
                     return null;
                   },
                 ),
@@ -69,7 +83,6 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> {
                     if (value == null || value.isEmpty) {
                       return 'Bitte geben Sie Ihre Telefonnummer ein';
                     }
-                    // TODO: Add phone number validation logic
                     return null;
                   },
                 ),
@@ -79,12 +92,6 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> {
                 child: CupertinoTextFormFieldRow(
                   controller: _addressController,
                   placeholder: 'Geben Sie Ihre Adresse ein',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Bitte geben Sie Ihre Adresse ein';
-                    }
-                    return null;
-                  },
                 ),
               ),
               CupertinoFormRow(
@@ -121,10 +128,13 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> {
         phone: _phoneController.text,
         address: _addressController.text,
         description: _descriptionController.text,
-        type: RequestType.other, // TODO: Add type selection
-        urgencyLevel: UrgencyLevel.normal, // TODO: Add urgency level selection
+        type: RequestType.trouble,
+        urgencyLevel: UrgencyLevel.medium,
       );
-      widget.onSubmit(troubleReport);
+      
+      if (widget.onSubmit != null) {
+        widget.onSubmit!(troubleReport);
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import 'dart:io';
-import '../domain/enums/request_type.dart';
-import '../domain/enums/urgency_level.dart';
+import '../../domain/enums/request_type.dart';
+import '../../domain/enums/urgency_level.dart';
 
 class TroubleReportForm {
   String? name;

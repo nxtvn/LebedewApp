@@ -1,7 +1,7 @@
-import '../../domain/entities/trouble_report.dart';
-import '../../domain/repositories/trouble_report_repository.dart';
-import '../../domain/enums/request_type.dart';
-import '../../domain/enums/urgency_level.dart';
+import '../../../domain/entities/trouble_report.dart';
+import '../../../domain/repositories/trouble_report_repository.dart';
+import '../../../domain/enums/request_type.dart';
+import '../../../domain/enums/urgency_level.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -18,7 +18,7 @@ class TroubleReportViewModel extends BaseViewModel {
   String? _email;
   String? _phone;
   String? _address;
-  RequestType? _type;
+  RequestType? _type = RequestType.trouble;
   String? _description;
   final List<String> _imagesPaths = [];
   final List<File> _images = [];
@@ -31,9 +31,9 @@ class TroubleReportViewModel extends BaseViewModel {
   DateTime? _occurrenceDate;
   String? _serviceHistory;
   String? _previousIssues;
-  UrgencyLevel? _urgencyLevel;
+  UrgencyLevel? _urgencyLevel = UrgencyLevel.medium;
 
-  bool _isLoading = false;
+  final bool _isLoading = false;
   String? _error;
 
   // Getters
@@ -54,6 +54,7 @@ class TroubleReportViewModel extends BaseViewModel {
   String? get serviceHistory => _serviceHistory;
   String? get previousIssues => _previousIssues;
   UrgencyLevel? get urgencyLevel => _urgencyLevel;
+  @override
   bool get isLoading => _isLoading;
   String? get error => _error;
   TroubleReportRepository get repository => _repository;
@@ -163,11 +164,10 @@ class TroubleReportViewModel extends BaseViewModel {
     }
   }
 
+  /// Sendet die Störungsmeldung an das Repository
+  /// Verwendet die BaseViewModel-Methode runAsyncOperation für konsistente Fehlerbehandlung
   Future<bool> submitReport() async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
+    return await runAsyncOperation<bool>(() async {
       final report = TroubleReport(
         type: _type ?? RequestType.trouble,
         name: _name ?? '',
@@ -188,13 +188,13 @@ class TroubleReportViewModel extends BaseViewModel {
       );
 
       return await _repository.submitReport(report, _images);
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    }) ?? false;
   }
 
+  @override
   void reset() {
+    super.reset(); // Ruft die reset-Methode der Basisklasse auf
+    
     _type = RequestType.trouble;
     _name = null;
     _email = null;
@@ -240,9 +240,12 @@ class TroubleReportViewModel extends BaseViewModel {
     );
   }
 
+  final picker = ImagePicker(); // Initialisiere den ImagePicker
+
   Future<void> pickImage(ImageSource source) async {
-    final picker = ImagePicker();
     try {
+      setLoading(); // Verwende BaseViewModel-Methode
+      
       if (source == ImageSource.gallery) {
         final List<XFile> pickedFiles = await picker.pickMultiImage();
         if (pickedFiles.isNotEmpty) {
@@ -264,7 +267,10 @@ class TroubleReportViewModel extends BaseViewModel {
           notifyListeners();
         }
       }
+      
+      setLoaded(); // Verwende BaseViewModel-Methode
     } catch (e) {
+      setError('Fehler beim Auswählen des Bildes: $e'); // Verwende BaseViewModel-Methode
       debugPrint('Error picking image: $e');
     }
   }
@@ -277,25 +283,27 @@ class TroubleReportViewModel extends BaseViewModel {
     }
   }
 
-  Future<bool> submitReport(TroubleReport report) async {
+  Future<bool> submitOptimizedReport(TroubleReport report) async {
     return await runAsyncOperation<bool>(() async {
       // Optimize images if available
-      if (report.images.isNotEmpty) {
-        final optimizedImages = <File>[];
+      if (report.imagesPaths.isNotEmpty) {
+        final optimizedImagePaths = <String>[];
         
-        for (final image in report.images) {
+        for (final imagePath in report.imagesPaths) {
           try {
+            final image = File(imagePath);
             final optimizedImage = await ImageUtils.optimizeImage(image);
-            optimizedImages.add(optimizedImage);
+            final optimizedPath = optimizedImage.path;
+            optimizedImagePaths.add(optimizedPath);
           } catch (e) {
-            // If optimization fails, use original image
-            optimizedImages.add(image);
+            // If optimization fails, use original image path
+            optimizedImagePaths.add(imagePath);
             debugPrint('Image optimization failed: $e');
           }
         }
         
-        // Update report with optimized images
-        report = report.copyWith(images: optimizedImages);
+        // Update report with optimized image paths
+        report = report.copyWith(imagesPaths: optimizedImagePaths);
       }
       
       // Submit report to repository

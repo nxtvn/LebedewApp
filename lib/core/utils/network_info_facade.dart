@@ -1,4 +1,4 @@
-import '../../../core/network/network_info.dart';
+import './network_info.dart';
 
 class NetworkInfoFacade {
   final NetworkInfo _networkInfo;

@@ -1,0 +1,11 @@
+{
+  "mailjet": {
+    "apiKey": "YOUR_MAILJET_API_KEY",
+    "secretKey": "YOUR_MAILJET_SECRET_KEY"
+  },
+  "email": {
+    "serviceEmail": "service@example.com",
+    "senderEmail": "noreply@example.com",
+    "senderName": "Lebedew Haustechnik"
+  }
+} 

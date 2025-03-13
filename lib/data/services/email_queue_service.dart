@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
-import '../domain/entities/trouble_report.dart';
+import 'dart:io';
+import '../../domain/entities/trouble_report.dart';
 import 'package:logging/logging.dart';
+import 'package:path_provider/path_provider.dart';
 
 class EmailQueueItem {
   final String subject;
@@ -78,16 +78,25 @@ class QueuedEmail {
 class EmailQueueService {
   static final _log = Logger('EmailQueueService');
   static const String _queueFileName = 'email_queue.json';
+  static const String _simpleQueueFileName = 'simple_email_queue.json';
   final List<QueuedEmail> _queue = [];
+  final List<EmailQueueItem> _simpleQueue = [];
   bool _isProcessing = false;
+  bool _isProcessingSimple = false;
 
   Future<String> get _queueFilePath async {
     final dir = await getApplicationDocumentsDirectory();
     return '${dir.path}/$_queueFileName';
   }
 
+  Future<String> get _simpleQueueFilePath async {
+    final dir = await getApplicationDocumentsDirectory();
+    return '${dir.path}/$_simpleQueueFileName';
+  }
+
   Future<void> initialize() async {
     try {
+      // Lade die Störungsmeldungs-Queue
       final file = File(await _queueFilePath);
       if (await file.exists()) {
         final content = await file.readAsString();
@@ -95,7 +104,18 @@ class EmailQueueService {
         _queue.addAll(
           jsonList.map((item) => QueuedEmail.fromJson(item)).toList(),
         );
-        _log.info('Queue geladen: ${_queue.length} E-Mails');
+        _log.info('Störungsmeldungs-Queue geladen: ${_queue.length} E-Mails');
+      }
+
+      // Lade die einfache E-Mail-Queue
+      final simpleFile = File(await _simpleQueueFilePath);
+      if (await simpleFile.exists()) {
+        final content = await simpleFile.readAsString();
+        final List<dynamic> jsonList = json.decode(content);
+        _simpleQueue.addAll(
+          jsonList.map((item) => EmailQueueItem.fromJson(item)).toList(),
+        );
+        _log.info('Einfache E-Mail-Queue geladen: ${_simpleQueue.length} E-Mails');
       }
     } catch (e) {
       _log.severe('Fehler beim Laden der Queue: $e');
@@ -112,6 +132,16 @@ class EmailQueueService {
     }
   }
 
+  Future<void> _saveSimpleQueue() async {
+    try {
+      final file = File(await _simpleQueueFilePath);
+      final jsonList = _simpleQueue.map((email) => email.toJson()).toList();
+      await file.writeAsString(json.encode(jsonList));
+    } catch (e) {
+      _log.severe('Fehler beim Speichern der einfachen Queue: $e');
+    }
+  }
+
   Future<void> addToQueue(TroubleReport report, List<String> imagePaths) async {
     _queue.add(QueuedEmail(
       report: report,
@@ -119,14 +149,20 @@ class EmailQueueService {
       timestamp: DateTime.now(),
     ));
     await _saveQueue();
-    _log.info('E-Mail zur Queue hinzugefügt');
+    _log.info('Störungsmeldung zur Queue hinzugefügt');
+  }
+
+  Future<void> addSimpleEmailToQueue(EmailQueueItem email) async {
+    _simpleQueue.add(email);
+    await _saveSimpleQueue();
+    _log.info('Einfache E-Mail zur Queue hinzugefügt');
   }
 
   Future<void> processQueue(Future<bool> Function(TroubleReport, List<File>) sendEmail) async {
     if (_isProcessing || _queue.isEmpty) return;
 
     _isProcessing = true;
-    _log.info('Starte Verarbeitung der Queue: ${_queue.length} E-Mails');
+    _log.info('Starte Verarbeitung der Störungsmeldungs-Queue: ${_queue.length} E-Mails');
 
     try {
       final List<QueuedEmail> successfulEmails = [];
@@ -142,10 +178,10 @@ class EmailQueueService {
           
           if (success) {
             successfulEmails.add(queuedEmail);
-            _log.info('Queued E-Mail erfolgreich gesendet');
+            _log.info('Queued Störungsmeldung erfolgreich gesendet');
           }
         } catch (e) {
-          _log.warning('Fehler beim Senden einer Queued E-Mail: $e');
+          _log.warning('Fehler beim Senden einer Queued Störungsmeldung: $e');
         }
       }
 
@@ -158,6 +194,45 @@ class EmailQueueService {
     }
   }
 
-  bool get hasQueuedEmails => _queue.isNotEmpty;
-  int get queueLength => _queue.length;
+  Future<void> processSimpleQueue(Future<bool> Function(EmailQueueItem) sendEmail) async {
+    if (_isProcessingSimple || _simpleQueue.isEmpty) return;
+
+    _isProcessingSimple = true;
+    _log.info('Starte Verarbeitung der einfachen E-Mail-Queue: ${_simpleQueue.length} E-Mails');
+
+    try {
+      final List<EmailQueueItem> successfulEmails = [];
+
+      for (final queuedEmail in _simpleQueue) {
+        try {
+          final success = await sendEmail(queuedEmail);
+          
+          if (success) {
+            successfulEmails.add(queuedEmail);
+            _log.info('Queued einfache E-Mail erfolgreich gesendet');
+          }
+        } catch (e) {
+          _log.warning('Fehler beim Senden einer Queued einfachen E-Mail: $e');
+        }
+      }
+
+      // Erfolgreiche E-Mails aus der Queue entfernen
+      _simpleQueue.removeWhere((email) => successfulEmails.contains(email));
+      await _saveSimpleQueue();
+      
+    } finally {
+      _isProcessingSimple = false;
+    }
+  }
+
+  bool get hasQueuedEmails => _queue.isNotEmpty || _simpleQueue.isNotEmpty;
+  int get queueLength => _queue.length + _simpleQueue.length;
+  int get troubleReportQueueLength => _queue.length;
+  int get simpleEmailQueueLength => _simpleQueue.length;
+
+  /// Lädt die E-Mail-Warteschlange
+  /// Diese Methode ist für die Abwärtskompatibilität mit älteren Versionen
+  Future<void> loadQueue() async {
+    await initialize();
+  }
 } 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
-import '../../presentation/common/viewmodels/trouble_report_viewmodel.dart';
-import '../../presentation/common/widgets/trouble_report_form.dart';
+import '../common/viewmodels/trouble_report_viewmodel.dart';
+import '../common/widgets/trouble_report_form.dart';
 
 class TroubleReportScreenAndroid extends StatelessWidget {
   const TroubleReportScreenAndroid({Key? key}) : super(key: key);
@@ -24,24 +24,51 @@ class _TroubleReportView extends StatefulWidget {
 }
 
 class _TroubleReportViewState extends State<_TroubleReportView> {
+  final _formKey = GlobalKey<FormState>();
+
   @override
   Widget build(BuildContext context) {
-    final viewModel = Provider.of<TroubleReportViewModel>(context);
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Störungsmeldung'),
         backgroundColor: Colors.blue,
       ),
       body: SafeArea(
-        child: viewModel.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : viewModel.hasError
-                ? _buildErrorView(viewModel.errorMessage)
-                : const SingleChildScrollView(
-                    padding: EdgeInsets.all(16.0),
-                    child: TroubleReportForm(),
-                  ),
+        child: Consumer<TroubleReportViewModel>(
+          builder: (context, viewModel, child) {
+            if (viewModel.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (viewModel.hasError) {
+              return _buildErrorView(viewModel.errorMessage);
+            } else {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: TroubleReportForm(formKey: _formKey),
+              );
+            }
+          },
+        ),
+      ),
+      floatingActionButton: Consumer<TroubleReportViewModel>(
+        builder: (context, viewModel, child) {
+          return FloatingActionButton(
+            onPressed: () async {
+              if (_formKey.currentState?.validate() ?? false) {
+                final success = await viewModel.submitReport();
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Störungsmeldung erfolgreich gesendet'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  viewModel.reset();
+                }
+              }
+            },
+            child: const Icon(Icons.send),
+          );
+        },
       ),
     );
   }

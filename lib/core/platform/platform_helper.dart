@@ -1,14 +1,14 @@
-import 'dart:io' show Platform;
-import 'package:flutter/material.dart';
+import 'dart:io';
 
+/// Hilfsmethoden für plattformspezifische Funktionen
 class PlatformHelper {
-  static bool get isIOS => Platform.isIOS;
-  static bool get isAndroid => Platform.isAndroid;
+  /// Prüft, ob die App auf iOS läuft
+  static bool isIOS() {
+    return Platform.isIOS;
+  }
   
-  static T platformWidget<T>({
-    required T Function() androidBuilder,
-    required T Function() iosBuilder,
-  }) {
-    return isIOS ? iosBuilder() : androidBuilder();
+  /// Prüft, ob die App auf Android läuft
+  static bool isAndroid() {
+    return Platform.isAndroid;
   }
 } 

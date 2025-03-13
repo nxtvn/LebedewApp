@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:lebedew_app/src/constants/design_constants.dart';
-import 'package:lebedew_app/src/theme/app_theme.dart';
+import '../../../core/constants/design_constants.dart';
+import '../../../core/theme/app_theme.dart';
 
 class FormTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -23,7 +23,7 @@ class FormTextField extends StatefulWidget {
   });
 
   @override
-  _FormTextFieldState createState() => _FormTextFieldState();
+  State<FormTextField> createState() => _FormTextFieldState();
 }
 
 class _FormTextFieldState extends State<FormTextField> {
@@ -42,9 +42,9 @@ class _FormTextFieldState extends State<FormTextField> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DesignConstants.defaultRadius),
         boxShadow: _focusNode.hasFocus
-            ? [BoxShadow(color: Colors.blue.withOpacity(0.2), blurRadius: 10)]
+            ? [BoxShadow(color: Colors.blue.withAlpha(DesignConstants.lowOpacityAlpha), blurRadius: 10)]
             : [],
       ),
       child: TextFormField(

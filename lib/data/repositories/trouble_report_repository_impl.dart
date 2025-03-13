@@ -63,13 +63,14 @@ class TroubleReportRepositoryImpl implements TroubleReportRepository {
     try {
       // Optimiere Bilder
       final optimizedImages = <File>[];
-      for (final image in report.images) {
+      for (final imagePath in report.imagesPaths) {
         try {
+          final image = File(imagePath);
           final optimizedImage = await ImageUtils.optimizeImage(image);
           optimizedImages.add(optimizedImage);
         } catch (e) {
           // Bei Fehler das Original verwenden
-          optimizedImages.add(image);
+          optimizedImages.add(File(imagePath));
           debugPrint('Fehler bei der Bildoptimierung: $e');
         }
       }

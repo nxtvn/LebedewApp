@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../core/platform/platform_helper.dart';
-import '../viewmodels/trouble_report_viewmodel.dart';
-import 'trouble_report_form_android.dart';
-import 'trouble_report_form_ios.dart';
+import '../../../domain/entities/trouble_report.dart';
 
-class TroubleReportForm extends StatelessWidget {
-  const TroubleReportForm({Key? key}) : super(key: key);
+/// Abstrakte Basisklasse für Störungsmeldungsformulare
+abstract class TroubleReportForm extends StatefulWidget {
+  final Function(TroubleReport) onSubmit;
+  
+  const TroubleReportForm({
+    Key? key,
+    required this.onSubmit,
+  }) : super(key: key);
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return PlatformHelper.platformWidget(
-      iosBuilder: () => const TroubleReportFormIOS(),
-      androidBuilder: () => const TroubleReportFormAndroid(),
-    );
-  }
+// Definiere ein Mixin für den Reset-Vorgang
+mixin TroubleReportFormResetMixin {
+  void reset();
 } 

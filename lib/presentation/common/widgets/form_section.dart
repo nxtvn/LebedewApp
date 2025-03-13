@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lebedew_app/src/constants/design_constants.dart';
+import '../../../core/constants/design_constants.dart';
 
 class FormSection extends StatelessWidget {
   final String title;

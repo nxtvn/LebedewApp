@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:image/image.dart' as img;
-import '../domain/entities/trouble_report.dart';
-import '../domain/services/email_service.dart';
-import '../core/config/env.dart';
+import '../../domain/entities/trouble_report.dart';
+import '../../domain/services/email_service.dart';
+import '../../core/config/app_config.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +18,10 @@ class MailjetEmailService implements EmailService {
   final String _secretKey;
   final String _toEmail;
   final EmailQueueService _queueService;
+  
+  // Zwischengespeicherte Werte für Absender-E-Mail und -Name
+  String? _cachedSenderEmail;
+  String? _cachedSenderName;
   
   MailjetEmailService({
     required String apiKey,
@@ -33,10 +37,108 @@ class MailjetEmailService implements EmailService {
       // Versuche, ausstehende E-Mails zu senden
       _processQueue();
     });
+    
+    // Lade die Absender-Informationen
+    _loadSenderInfo();
+  }
+  
+  /// Lädt die Absender-Informationen aus AppConfig
+  Future<void> _loadSenderInfo() async {
+    _cachedSenderEmail = await AppConfig.senderEmail;
+    _cachedSenderName = await AppConfig.senderName;
+    _log.info('Absender-Informationen geladen: $_cachedSenderName <$_cachedSenderEmail>');
+  }
+  
+  /// Gibt die Absender-E-Mail zurück
+  Future<String> get _senderEmail async {
+    if (_cachedSenderEmail == null || _cachedSenderEmail!.isEmpty) {
+      await _loadSenderInfo();
+    }
+    return _cachedSenderEmail ?? '';
+  }
+  
+  /// Gibt den Absender-Namen zurück
+  Future<String> get _senderName async {
+    if (_cachedSenderName == null || _cachedSenderName!.isEmpty) {
+      await _loadSenderInfo();
+    }
+    return _cachedSenderName ?? '';
   }
 
   Future<void> _processQueue() async {
+    // Verarbeite Störungsmeldungen
     await _queueService.processQueue(_sendEmail);
+    
+    // Verarbeite einfache E-Mails
+    await _queueService.processSimpleQueue(_sendSimpleEmail);
+  }
+
+  Future<bool> _sendSimpleEmail(EmailQueueItem email) async {
+    try {
+      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $auth',
+      };
+
+      final Map<String, dynamic> emailData = {
+        'Messages': [
+          {
+            'From': {
+              'Email': email.fromEmail ?? await _senderEmail,
+              'Name': email.fromName ?? await _senderName,
+            },
+            'To': [
+              {
+                'Email': email.toEmail,
+                'Name': '',
+              }
+            ],
+            'Subject': email.subject,
+            'HTMLPart': email.body,
+          }
+        ]
+      };
+
+      // Füge Anhänge hinzu, falls vorhanden
+      if (email.attachmentPaths != null && email.attachmentPaths!.isNotEmpty) {
+        final attachments = <Map<String, dynamic>>[];
+        
+        for (final path in email.attachmentPaths!) {
+          try {
+            final file = File(path);
+            if (await file.exists()) {
+              final bytes = await file.readAsBytes();
+              final filename = path.split('/').last;
+              final contentType = _getContentType(filename);
+              
+              attachments.add({
+                'ContentType': contentType,
+                'Filename': filename,
+                'Base64Content': base64Encode(bytes),
+              });
+            }
+          } catch (e) {
+            debugPrint('Error adding attachment: $e');
+          }
+        }
+        
+        if (attachments.isNotEmpty) {
+          emailData['Messages'][0]['Attachments'] = attachments;
+        }
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send'),
+        headers: headers,
+        body: jsonEncode(emailData),
+      );
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      _log.severe('Fehler beim Senden einer einfachen E-Mail', e);
+      return false;
+    }
   }
 
   /// Komprimiert ein Bild auf 80% Qualität
@@ -228,8 +330,8 @@ class MailjetEmailService implements EmailService {
           'Messages': [
             {
               'From': {
-                'Email': Env.senderEmail,
-                'Name': Env.senderName,
+                'Email': await _senderEmail,
+                'Name': await _senderName,
               },
               'To': [
                 {
@@ -257,8 +359,8 @@ class MailjetEmailService implements EmailService {
           'Messages': [
             {
               'From': {
-                'Email': Env.senderEmail,
-                'Name': Env.senderName,
+                'Email': await _senderEmail,
+                'Name': await _senderName,
               },
               'To': [
                 {
@@ -330,8 +432,8 @@ class MailjetEmailService implements EmailService {
         'Messages': [
           {
             'From': {
-              'Email': fromEmail ?? 'service@lebedew.de',
-              'Name': fromName ?? 'Lebedew Service',
+              'Email': fromEmail ?? await _senderEmail,
+              'Name': fromName ?? await _senderName,
             },
             'To': [
               {
@@ -385,7 +487,7 @@ class MailjetEmailService implements EmailService {
         debugPrint('Failed to send email: ${response.body}');
         
         // Bei Fehler zur Warteschlange hinzufügen
-        await _queueService.addToQueue(
+        await _queueService.addSimpleEmailToQueue(
           EmailQueueItem(
             subject: subject,
             body: body,
@@ -402,7 +504,7 @@ class MailjetEmailService implements EmailService {
       debugPrint('Error sending email: $e');
       
       // Bei Ausnahme zur Warteschlange hinzufügen
-      await _queueService.addToQueue(
+      await _queueService.addSimpleEmailToQueue(
         EmailQueueItem(
           subject: subject,
           body: body,

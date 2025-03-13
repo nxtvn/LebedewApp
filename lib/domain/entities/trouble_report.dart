@@ -1,19 +1,6 @@
-import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../enums/request_type.dart';
 import '../enums/urgency_level.dart';
-
-enum RequestType {
-  heating,
-  plumbing,
-  other,
-}
-
-enum UrgencyLevel {
-  low,
-  normal,
-  high,
-}
 
 class TroubleReport {
   final String id;

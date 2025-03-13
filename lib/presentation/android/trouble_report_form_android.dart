@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../domain/entities/trouble_report.dart';
+import '../../../domain/enums/request_type.dart';
+import '../../../domain/enums/urgency_level.dart';
 
 class TroubleReportFormAndroid extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -21,6 +23,8 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
+  RequestType? _selectedType;
+  UrgencyLevel? _selectedUrgency;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +58,11 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
               if (value == null || value.isEmpty) {
                 return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
               }
-              // TODO: Add email validation logic
+              // E-Mail-Validierung mit RegExp
+              final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+              if (!emailRegex.hasMatch(value)) {
+                return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
+              }
               return null;
             },
           ),
@@ -67,10 +75,13 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
             ),
             keyboardType: TextInputType.phone,
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Bitte geben Sie Ihre Telefonnummer ein';
+              if (value != null && value.isNotEmpty) {
+                // Telefonnummer-Validierung mit RegExp (erlaubt verschiedene Formate)
+                final phoneRegex = RegExp(r'^[+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$');
+                if (!phoneRegex.hasMatch(value)) {
+                  return 'Bitte geben Sie eine gültige Telefonnummer ein';
+                }
               }
-              // TODO: Add phone number validation logic
               return null;
             },
           ),
@@ -121,8 +132,8 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> {
         phone: _phoneController.text,
         address: _addressController.text,
         description: _descriptionController.text,
-        type: RequestType.other, // TODO: Add type selection
-        urgencyLevel: UrgencyLevel.normal, // TODO: Add urgency level selection
+        type: _selectedType ?? RequestType.other,
+        urgencyLevel: _selectedUrgency ?? UrgencyLevel.medium,
       );
       widget.onSubmit(troubleReport);
     }
