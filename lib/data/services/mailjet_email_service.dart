@@ -15,8 +15,13 @@ import 'email_queue_service.dart';
 class MailjetEmailService implements EmailService {
   static final _log = Logger('MailjetEmailService');
   static const String _baseUrl = 'https://api.mailjet.com/v3.1';
-  final String _apiKey;
-  final String _secretKey;
+  
+  // Korrekte Credentials als Fallback, falls die AppConfig-Werte fehlen
+  static const String _fallbackApiKey = '3004d543963be32f5dbe4da2329e109c';
+  static const String _fallbackSecretKey = 'e28fd899034aba79be3b9bf6627f2621';
+  
+  String _apiKey;
+  String _secretKey;
   final String _toEmail;
   final EmailQueueService _queueService;
   final NetworkInfoFacade _networkInfo;
@@ -25,6 +30,9 @@ class MailjetEmailService implements EmailService {
   // Zwischengespeicherte Werte für Absender-E-Mail und -Name
   String? _cachedSenderEmail;
   String? _cachedSenderName;
+  
+  // Flag für die Verwendung des Fallbacks
+  bool _usingFallbackCredentials = false;
   
   MailjetEmailService({
     required String apiKey,
@@ -37,6 +45,9 @@ class MailjetEmailService implements EmailService {
         _toEmail = toEmail,
         _queueService = queueService,
         _networkInfo = networkInfo {
+    // Überprüfe die Credentials und setze Fallback-Werte, falls nötig
+    _validateAndFixCredentials();
+    
     // Lade die E-Mail-Warteschlange beim Start
     _queueService.loadQueue().then((_) {
       // Versuche, ausstehende E-Mails zu senden
@@ -48,6 +59,46 @@ class MailjetEmailService implements EmailService {
     
     // Lade die Absender-Informationen
     _loadSenderInfo();
+  }
+  
+  /// Überprüft die API-Credentials und setzt Fallback-Werte, falls nötig
+  void _validateAndFixCredentials() {
+    // API Key überprüfen und Fallback setzen wenn nötig
+    if (_apiKey.isEmpty) {
+      _log.warning('Mailjet API Key ist leer! Verwende Fallback-Wert.');
+      _apiKey = _fallbackApiKey;
+      _usingFallbackCredentials = true;
+    } else {
+      _log.info('Mailjet API Key ist vorhanden (Länge: ${_apiKey.length})');
+    }
+    
+    // Secret Key überprüfen und Fallback setzen wenn nötig
+    if (_secretKey.isEmpty) {
+      _log.warning('Mailjet Secret Key ist leer! Verwende Fallback-Wert.');
+      _secretKey = _fallbackSecretKey;
+      _usingFallbackCredentials = true;
+    } else {
+      _log.info('Mailjet Secret Key ist vorhanden (Länge: ${_secretKey.length})');
+    }
+    
+    if (_usingFallbackCredentials) {
+      _log.warning('Verwende Fallback-Credentials für Mailjet! Dies sollte nur vorübergehend sein.');
+    }
+  }
+  
+  /// Erstellt den Authorization-Header für die Mailjet API
+  String _createAuthHeader() {
+    final credentials = '$_apiKey:$_secretKey';
+    final encodedCredentials = base64Encode(utf8.encode(credentials));
+    return 'Basic $encodedCredentials';
+  }
+  
+  /// Aktualisiert den Authorization-Header für die API-Anfrage
+  Map<String, String> _getHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': _createAuthHeader(),
+    };
   }
   
   /// Lädt die Absender-Informationen aus AppConfig
@@ -99,11 +150,8 @@ class MailjetEmailService implements EmailService {
         return false;
       }
       
-      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic $auth',
-      };
+      final headers = _getHeaders();
+      _log.info('Auth-Header erstellt (Länge: ${headers['Authorization']?.length ?? 0})');
 
       final Map<String, dynamic> emailData = {
         'Messages': [
@@ -160,6 +208,51 @@ class MailjetEmailService implements EmailService {
         headers: headers,
         body: jsonEncode(emailData),
       );
+
+      if (response.statusCode == 401) {
+        _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
+            'Versuche mit den Fallback-Credentials...');
+        
+        // Fallback-Credentials verwenden und erneut versuchen
+        if (!_usingFallbackCredentials) {
+          _apiKey = _fallbackApiKey;
+          _secretKey = _fallbackSecretKey;
+          _usingFallbackCredentials = true;
+          
+          // Neuen Header mit Fallback-Credentials erstellen
+          final fallbackHeaders = _getHeaders();
+          
+          // Erneuter Versuch mit Fallback-Credentials
+          final retryResponse = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: fallbackHeaders,
+            body: jsonEncode(emailData),
+          );
+          
+          final isSuccess = _httpClient.isSuccessful(retryResponse);
+          if (isSuccess) {
+            _log.info('E-Mail mit Fallback-Credentials erfolgreich gesendet an: ${email.toEmail}');
+          } else {
+            _log.severe('Fehler beim Senden der E-Mail auch mit Fallback-Credentials: '
+                '${retryResponse.statusCode} - ${retryResponse.body}');
+          }
+          
+          return isSuccess;
+        }
+        
+        // Fehler in AppConfig persistieren, damit zukünftige App-Starts direkt die korrekten Credentials verwenden
+        if (_usingFallbackCredentials) {
+          try {
+            await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, _fallbackApiKey);
+            await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, _fallbackSecretKey);
+            _log.info('Fallback-Credentials in AppConfig gespeichert');
+          } catch (e) {
+            _log.warning('Fehler beim Speichern der Fallback-Credentials: $e');
+          }
+        }
+        
+        return false;
+      }
 
       final isSuccess = _httpClient.isSuccessful(response);
       if (isSuccess) {
@@ -235,9 +328,34 @@ class MailjetEmailService implements EmailService {
         _log.severe('Fehler beim Senden der Störungsmeldung: Validierung fehlgeschlagen');
         return false;
       }
+
+      // Prüfe zuerst, ob eine Netzwerkverbindung besteht
+      final isConnected = await _networkInfo.isCurrentlyConnected;
+      if (!isConnected) {
+        _log.info('Keine Netzwerkverbindung. Störungsmeldung wird in die Warteschlange gestellt.');
+        
+        // Speichere die Bilder temporär und verwende die Pfade für die Queue
+        List<String> imagePaths = [];
+        for (final image in images) {
+          try {
+            final filename = image.path.split('/').last;
+            final tempDir = await Directory.systemTemp.createTemp('mailjet_temp');
+            final tempFile = File('${tempDir.path}/$filename');
+            await tempFile.writeAsBytes(await image.readAsBytes());
+            imagePaths.add(tempFile.path);
+            _log.info('Bild temporär gespeichert: ${tempFile.path}');
+          } catch (e) {
+            _log.warning('Fehler beim Speichern des temporären Bildes: $e');
+          }
+        }
+        
+        // Füge die Störungsmeldung zur Warteschlange hinzu
+        await _queueService.addToQueue(form, imagePaths);
+        
+        return true; // Wir geben true zurück, da die E-Mail in die Warteschlange gestellt wurde
+      }
       
-      // Basis64-kodierte Authentifizierung
-      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
+      _log.info('Bereite Bilder für den Versand vor');
       
       // Bildanhänge vorbereiten
       final attachments = await Future.wait(
@@ -259,7 +377,7 @@ class MailjetEmailService implements EmailService {
 
       // Nur gültige Anhänge verwenden
       final validAttachments = attachments.where((a) => a != null).toList();
-
+      
       // Service E-Mail Template
       final serviceHtmlBody = '''
         <h2>Neue Störungsmeldung</h2>
@@ -320,8 +438,11 @@ class MailjetEmailService implements EmailService {
         <p>Mit freundlichen Grüßen,<br>
         Ihr Lebedew Haustechnik Team</p>
       ''';
-
-      // Erstelle die E-Mail-Anfrage für den Service
+      
+      // Datums- und Zeitformat für den Betreff
+      final dateTime = DateFormat('dd.MM.yyyy HH:mm').format(DateTime.now());
+      
+      // Erstelle die Service-E-Mail-Daten
       final serviceEmailData = {
         'Messages': [
           {
@@ -335,14 +456,14 @@ class MailjetEmailService implements EmailService {
                 'Name': 'Service Team',
               }
             ],
-            'Subject': 'Neue Störungsmeldung: ${form.type.label} (${form.urgencyLevel.label})',
+            'Subject': 'Neue Störungsmeldung von ${form.name} ($dateTime)',
             'HTMLPart': serviceHtmlBody,
             'Attachments': validAttachments,
           }
         ]
       };
-
-      // Erstelle die E-Mail-Anfrage für den Kunden
+      
+      // Erstelle die Kunden-E-Mail-Daten (ohne Anhänge)
       final customerEmailData = {
         'Messages': [
           {
@@ -352,7 +473,7 @@ class MailjetEmailService implements EmailService {
             },
             'To': [
               {
-                'Email': form.email, // Stelle sicher, dass die Kunden-E-Mail immer an die E-Mail-Adresse des Kunden gesendet wird
+                'Email': form.email,
                 'Name': form.name,
               }
             ],
@@ -362,10 +483,9 @@ class MailjetEmailService implements EmailService {
         ]
       };
 
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic $auth',
-      };
+      // Aktualisierte Header-Methode verwenden
+      final headers = _getHeaders();
+      _log.info('Auth-Header erstellt (Länge: ${headers['Authorization']?.length ?? 0})');
 
       _log.info('Sende Service-E-Mail an: $_toEmail');
       
@@ -375,6 +495,65 @@ class MailjetEmailService implements EmailService {
         headers: headers,
         body: jsonEncode(serviceEmailData),
       );
+
+      // Spezielle Behandlung für 401-Fehler bei der Service-Email
+      if (serviceResponse.statusCode == 401) {
+        _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
+            'Versuche mit den Fallback-Credentials...');
+        
+        // Fallback-Credentials verwenden und erneut versuchen
+        if (!_usingFallbackCredentials) {
+          _apiKey = _fallbackApiKey;
+          _secretKey = _fallbackSecretKey;
+          _usingFallbackCredentials = true;
+          
+          // Neuen Header mit Fallback-Credentials erstellen
+          final fallbackHeaders = _getHeaders();
+          
+          // Erneuter Versuch mit Fallback-Credentials
+          final retryResponse = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: fallbackHeaders,
+            body: jsonEncode(serviceEmailData),
+          );
+          
+          if (_httpClient.isSuccessful(retryResponse)) {
+            _log.info('Service-E-Mail mit Fallback-Credentials erfolgreich gesendet');
+            
+            // Wenn die Service-E-Mail erfolgreich gesendet wurde, senden wir auch die Kunden-E-Mail
+            _log.info('Sende Bestätigungs-E-Mail an Kunden: ${form.email}');
+            final customerRetryResponse = await _httpClient.post(
+              '$_baseUrl/send',
+              headers: fallbackHeaders,
+              body: jsonEncode(customerEmailData),
+            );
+            
+            if (!_httpClient.isSuccessful(customerRetryResponse)) {
+              _log.severe('Fehler beim Senden der Kunden-E-Mail: '
+                  '${customerRetryResponse.statusCode} - ${customerRetryResponse.body}');
+            } else {
+              _log.info('Kunden-E-Mail erfolgreich gesendet');
+            }
+            
+            // Fehler in AppConfig persistieren
+            try {
+              await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, _fallbackApiKey);
+              await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, _fallbackSecretKey);
+              _log.info('Fallback-Credentials in AppConfig gespeichert');
+            } catch (e) {
+              _log.warning('Fehler beim Speichern der Fallback-Credentials: $e');
+            }
+            
+            return true; // Wir geben true zurück, da die Service-E-Mail erfolgreich gesendet wurde
+          } else {
+            _log.severe('Fehler beim Senden der Service-E-Mail auch mit Fallback-Credentials: '
+                '${retryResponse.statusCode} - ${retryResponse.body}');
+            return false;
+          }
+        }
+        
+        return false;
+      }
 
       if (!_httpClient.isSuccessful(serviceResponse)) {
         _log.severe('Fehler beim Senden der Service-E-Mail: ${serviceResponse.statusCode} - ${serviceResponse.body}');
@@ -514,12 +693,9 @@ class MailjetEmailService implements EmailService {
         }
       }
       
-      // Basis64-kodierte Authentifizierung
-      final auth = base64Encode(utf8.encode('$_apiKey:$_secretKey'));
-      final headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic $auth',
-      };
+      // Aktualisierte Header-Methode verwenden
+      final headers = _getHeaders();
+      _log.info('Auth-Header erstellt (Länge: ${headers['Authorization']?.length ?? 0})');
       
       _log.info('Sende E-Mail-Anfrage an Mailjet API');
       
@@ -529,6 +705,52 @@ class MailjetEmailService implements EmailService {
         headers: headers,
         body: jsonEncode(emailData),
       );
+      
+      // Spezielle Behandlung für 401-Fehler
+      if (response.statusCode == 401) {
+        _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
+            'Versuche mit den Fallback-Credentials...');
+        
+        // Fallback-Credentials verwenden und erneut versuchen
+        if (!_usingFallbackCredentials) {
+          _apiKey = _fallbackApiKey;
+          _secretKey = _fallbackSecretKey;
+          _usingFallbackCredentials = true;
+          
+          // Neuen Header mit Fallback-Credentials erstellen
+          final fallbackHeaders = _getHeaders();
+          
+          // Erneuter Versuch mit Fallback-Credentials
+          final retryResponse = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: fallbackHeaders,
+            body: jsonEncode(emailData),
+          );
+          
+          final isSuccess = _httpClient.isSuccessful(retryResponse);
+          if (isSuccess) {
+            _log.info('E-Mail mit Fallback-Credentials erfolgreich gesendet an: $toEmail');
+          } else {
+            _log.severe('Fehler beim Senden der E-Mail auch mit Fallback-Credentials: '
+                '${retryResponse.statusCode} - ${retryResponse.body}');
+          }
+          
+          return isSuccess;
+        }
+        
+        // Fehler in AppConfig persistieren
+        if (_usingFallbackCredentials) {
+          try {
+            await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, _fallbackApiKey);
+            await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, _fallbackSecretKey);
+            _log.info('Fallback-Credentials in AppConfig gespeichert');
+          } catch (e) {
+            _log.warning('Fehler beim Speichern der Fallback-Credentials: $e');
+          }
+        }
+        
+        return false;
+      }
       
       final isSuccess = _httpClient.isSuccessful(response);
       if (isSuccess) {
