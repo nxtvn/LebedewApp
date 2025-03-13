@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
@@ -193,36 +192,19 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
 
   /// Zeigt Feedback während des Sendens an
   void _showSendingFeedback() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      _buildCupertinoStyleSnackBar(
-        content: const Row(
-          children: [
-            CupertinoActivityIndicator(radius: 10),
-            SizedBox(width: 10),
-            Text('Störungsmeldung wird gesendet...'),
-          ],
-        ),
-        duration: const Duration(seconds: 2),
+    showCupertinoDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Senden'),
+        content: const Text('Störungsmeldung wird gesendet...'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       ),
-    );
-  }
-
-  /// Erstellt einen SnackBar im Cupertino-Stil
-  SnackBar _buildCupertinoStyleSnackBar({
-    required Widget content,
-    required Duration duration,
-  }) {
-    return SnackBar(
-      content: content,
-      duration: duration,
-      backgroundColor: CupertinoColors.systemGrey6,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      margin: const EdgeInsets.all(8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      elevation: 0,
     );
   }
 

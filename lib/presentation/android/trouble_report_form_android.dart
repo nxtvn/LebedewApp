@@ -219,6 +219,8 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
           _buildDescriptionSection(),
           const SizedBox(height: 16),
           _buildUrgencySection(),
+          const SizedBox(height: 16),
+          _buildTermsSection(),
           const SizedBox(height: 24),
           _buildSubmitButton(),
         ],
@@ -325,7 +327,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                 if (value == null || value.isEmpty) {
                   return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
                 }
-                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
                   return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
                 }
                 return null;
@@ -680,6 +682,123 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Nutzungsbedingungen *',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Consumer<TroubleReportViewModel>(
+              builder: (context, viewModel, _) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _showTermsAndConditions(),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          'Allgemeine Geschäftsbedingungen anzeigen',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: viewModel.hasAcceptedTerms,
+                          onChanged: (value) {
+                            if (value != null) {
+                              viewModel.setHasAcceptedTerms(value);
+                            }
+                          },
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Ich akzeptiere die AGBs der Lebedew Haustechnik',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (!viewModel.hasAcceptedTerms && widget.formKey.currentState?.validate() == false)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Bitte akzeptieren Sie die AGBs',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTermsAndConditions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Allgemeine Geschäftsbedingungen'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Allgemeine Geschäftsbedingungen der Lebedew Haustechnik',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              SizedBox(height: 16),
+              Text(
+                '1. Geltungsbereich\n\n'
+                'Diese Allgemeinen Geschäftsbedingungen gelten für alle Verträge, Lieferungen und sonstigen Leistungen der Lebedew Haustechnik (nachfolgend "Anbieter" genannt) gegenüber ihren Kunden.\n\n'
+                '2. Vertragsschluss\n\n'
+                'Mit Absenden einer Störungsmeldung über die App gibt der Kunde ein Angebot zum Abschluss eines Vertrages ab. Der Vertrag kommt zustande, wenn der Anbieter dieses Angebot annimmt.\n\n'
+                '3. Leistungen\n\n'
+                'Der Anbieter erbringt Leistungen im Bereich der Haustechnik, insbesondere Reparatur-, Wartungs- und Installationsarbeiten.\n\n'
+                '4. Preise und Zahlungsbedingungen\n\n'
+                'Die Preise für die Leistungen des Anbieters richten sich nach der jeweils aktuellen Preisliste. Die Zahlung erfolgt nach Rechnungsstellung.\n\n'
+                '5. Datenschutz\n\n'
+                'Der Anbieter erhebt, verarbeitet und nutzt personenbezogene Daten des Kunden gemäß den geltenden Datenschutzbestimmungen. Weitere Informationen finden Sie in unserer Datenschutzerklärung.\n\n'
+                '6. Schlussbestimmungen\n\n'
+                'Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist, soweit gesetzlich zulässig, der Sitz des Anbieters.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Schließen'),
+          ),
+        ],
       ),
     );
   }

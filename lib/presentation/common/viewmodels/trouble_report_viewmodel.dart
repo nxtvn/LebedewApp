@@ -349,30 +349,13 @@ class TroubleReportViewModel extends BaseViewModel {
   ///
   /// Gibt true zurück, wenn beide Berechtigungen erteilt wurden, sonst false
   Future<bool> requestPermissions() async {
-    // Prüfe zuerst den aktuellen Status der Berechtigungen
-    final cameraStatus = await Permission.camera.status;
-    final storageStatus = Platform.isAndroid && await Permission.storage.status.isGranted
-        ? await Permission.storage.status
-        : await Permission.photos.status;
-    
-    // Wenn bereits alle Berechtigungen erteilt wurden, gib true zurück
-    if (cameraStatus.isGranted && (storageStatus.isGranted || storageStatus.isLimited)) {
-      return true;
-    }
-    
-    // Wenn Berechtigungen permanent verweigert wurden, zeige einen Dialog an
-    if (cameraStatus.isPermanentlyDenied || storageStatus.isPermanentlyDenied) {
-      setError('Einige Berechtigungen wurden dauerhaft verweigert. Bitte öffnen Sie die App-Einstellungen, um die Berechtigungen manuell zu erteilen.');
-      return false;
-    }
-    
-    // Fordere die Berechtigungen an
+    // Always request permissions directly
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
       Platform.isAndroid ? Permission.storage : Permission.photos,
     ].request();
     
-    // Prüfe, ob alle Berechtigungen erteilt wurden
+    // Check if permissions granted
     final cameraGranted = statuses[Permission.camera]!.isGranted;
     final storageGranted = Platform.isAndroid 
         ? statuses[Permission.storage]!.isGranted 
@@ -381,6 +364,7 @@ class TroubleReportViewModel extends BaseViewModel {
     return cameraGranted && storageGranted;
   }
   
+  /*
   /// Zeigt einen Dialog an, der erklärt, warum die App bestimmte Berechtigungen benötigt
   ///
   /// [context] ist der BuildContext, der für den Dialog benötigt wird
@@ -435,6 +419,7 @@ class TroubleReportViewModel extends BaseViewModel {
     
     return result ?? false;
   }
+  */
 
   /// Wählt ein Bild aus der Galerie oder Kamera aus
   ///
@@ -447,21 +432,10 @@ class TroubleReportViewModel extends BaseViewModel {
       // Berechtigungen anfordern
       final permissionsGranted = await requestPermissions();
       if (!permissionsGranted) {
-        // Wenn der Kontext verfügbar ist, zeige einen Dialog an
-        if (context != null) {
-          final Permission permission = source == ImageSource.camera 
-              ? Permission.camera 
-              : (Platform.isAndroid ? Permission.storage : Permission.photos);
-          
-          // Prüfe, ob der Widget-Baum noch montiert ist, bevor der Dialog angezeigt wird
-          if (context.mounted) {
-            final userWantsPermission = await showPermissionDialog(context, permission);
-            
-            if (userWantsPermission) {
-              // Öffne die App-Einstellungen
-              await openAppSettings();
-            }
-          }
+        // Wenn Berechtigungen verweigert wurden, öffne die App-Einstellungen
+        if (context != null && context.mounted) {
+          setError('Einige Berechtigungen wurden verweigert. Sie können die App-Einstellungen öffnen, um die Berechtigungen zu erteilen.');
+          await openAppSettings();
         } else {
           setError('Berechtigungen wurden verweigert. Bitte erteilen Sie die erforderlichen Berechtigungen in den Einstellungen.');
         }

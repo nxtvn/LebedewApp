@@ -113,6 +113,11 @@ class MyApp extends StatelessWidget {
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme.copyWith(),
+        builder: (context, child) {
+          return ScaffoldMessenger(
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,

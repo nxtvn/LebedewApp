@@ -773,12 +773,8 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         return CupertinoIcons.exclamationmark_triangle;
       case RequestType.maintenance:
         return CupertinoIcons.wrench;
-      case RequestType.installation:
-        return CupertinoIcons.hammer;
       case RequestType.consultation:
         return CupertinoIcons.chat_bubble_2;
-      case RequestType.other:
-        return CupertinoIcons.question;
     }
   }
 
@@ -789,12 +785,8 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         return 'Melden Sie ein Problem oder eine Störung an Ihrem Gerät.';
       case RequestType.maintenance:
         return 'Vereinbaren Sie einen Termin für die regelmäßige Wartung Ihres Geräts.';
-      case RequestType.installation:
-        return 'Anfrage für die Installation eines neuen Geräts oder Systems.';
       case RequestType.consultation:
         return 'Beratung zu Produkten, Lösungen oder technischen Fragen.';
-      case RequestType.other:
-        return 'Andere Anfragen, die nicht in die obigen Kategorien passen.';
     }
   }
 
@@ -827,7 +819,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
               if (value == null || value.isEmpty) {
                 return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
               }
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+              if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
                 return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
               }
               return null;
@@ -1193,24 +1185,33 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
               error: !viewModel.hasAcceptedTerms && widget.formKey.currentState?.validate() == false
                   ? const Text('Bitte akzeptieren Sie die AGBs', style: TextStyle(color: CupertinoColors.destructiveRed))
                   : null,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _showTermsAndConditions(),
-                      child: const Text(
+                  GestureDetector(
+                    onTap: () => _showTermsAndConditions(),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12.0),
+                      child: Text(
                         'Ich akzeptiere die AGBs der Lebedew Haustechnik',
                         style: TextStyle(
                           color: CupertinoColors.activeBlue,
                           decoration: TextDecoration.underline,
+                          fontSize: 16,
                         ),
                       ),
                     ),
                   ),
-                  CupertinoSwitch(
-                    value: viewModel.hasAcceptedTerms,
-                    onChanged: (value) => viewModel.setHasAcceptedTerms(value),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Akzeptieren'),
+                      CupertinoSwitch(
+                        value: viewModel.hasAcceptedTerms,
+                        onChanged: (value) => viewModel.setHasAcceptedTerms(value),
+                      ),
+                    ],
                   ),
                 ],
               ),
