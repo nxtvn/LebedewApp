@@ -1,127 +1,101 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import 'trouble_report_form_android.dart';
+import '../../core/utils/error_handler.dart';
+import '../../data/repositories/trouble_report_repository_impl.dart';
+import '../../domain/services/email_service.dart';
+import '../../domain/services/image_storage_service.dart';
 
 class TroubleReportScreenAndroid extends StatelessWidget {
   const TroubleReportScreenAndroid({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<TroubleReportViewModel>(
-      create: (context) => GetIt.I<TroubleReportViewModel>(),
-      child: const _TroubleReportView(),
-    );
-  }
-}
-
-class _TroubleReportView extends StatefulWidget {
-  const _TroubleReportView();
-
-  @override
-  State<_TroubleReportView> createState() => _TroubleReportViewState();
-}
-
-class _TroubleReportViewState extends State<_TroubleReportView> {
-  final _formKey = GlobalKey<FormState>();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Störungsmeldung'),
-        backgroundColor: Colors.blue,
+    // Da wir die Services direkt injizieren müssen, holen wir sie aus dem GetIt Container
+    final emailService = GetIt.instance<EmailService>();
+    final imageStorageService = GetIt.instance<ImageStorageService>();
+    
+    return ChangeNotifierProvider(
+      create: (_) => TroubleReportViewModel(
+        // Repository direkt mit den nötigen Services erstellen
+        TroubleReportRepositoryImpl(emailService, imageStorageService)
       ),
-      body: SafeArea(
-        child: Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, child) {
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Störungsmeldung'),
+        ),
+        body: Consumer<TroubleReportViewModel>(
+          builder: (context, viewModel, _) {
             if (viewModel.isLoading) {
               return const Center(child: CircularProgressIndicator());
-            } else if (viewModel.hasError) {
-              return _buildErrorView(viewModel.errorMessage);
-            } else {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: TroubleReportFormAndroid(
-                  formKey: _formKey,
-                  onSubmit: (report) async {
-                    final viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
-                    final success = await viewModel.submitReport();
-                    if (success && mounted) {
-                      _showSuccessMessage();
-                      viewModel.reset();
-                    }
-                  },
-                ),
+            }
+            
+            if (viewModel.lastError != null) {
+              return AppErrorHandler.buildErrorWidget(
+                context, 
+                viewModel.lastError!,
+                onRetry: () => viewModel.clearLastError(),
               );
             }
+            
+            // Wir benötigen einen FormKey für TroubleReportFormAndroid
+            final formKey = GlobalKey<FormState>();
+            
+            return TroubleReportFormAndroid(
+              formKey: formKey,
+              onSubmit: (report) async {
+                final success = await viewModel.submitReport();
+                if (success && context.mounted) {
+                  _showSuccessMessage(context, viewModel.lastSubmissionStatus);
+                }
+              },
+            );
+          },
+        ),
+        floatingActionButton: Consumer<TroubleReportViewModel>(
+          builder: (context, viewModel, _) {
+            if (viewModel.isLoading || viewModel.lastError != null) {
+              return const SizedBox.shrink();
+            }
+            
+            return FloatingActionButton.extended(
+              onPressed: () async {
+                // Wir können keine Validierung in der FloatingActionButton vornehmen
+                // da der FormKey im anderen Widget existiert
+                final success = await viewModel.submitReport();
+                
+                if (success && context.mounted) {
+                  _showSuccessMessage(context, viewModel.lastSubmissionStatus);
+                } else if (!success && context.mounted && viewModel.lastError != null) {
+                  AppErrorHandler.handleError(context, viewModel.lastError!);
+                }
+              },
+              label: const Text('Absenden'),
+              icon: const Icon(Icons.send),
+            );
           },
         ),
       ),
-      floatingActionButton: Consumer<TroubleReportViewModel>(
-        builder: (context, viewModel, child) {
-          return FloatingActionButton(
-            onPressed: () async {
-              if (_formKey.currentState?.validate() ?? false) {
-                final success = await viewModel.submitReport();
-                if (success && mounted) {
-                  _showSuccessMessage();
-                  viewModel.reset();
-                }
-              }
-            },
-            child: const Icon(Icons.send),
-          );
-        },
-      ),
     );
   }
 
-  void _showSuccessMessage() {
-    if (!mounted) return;
-    
+  void _showSuccessMessage(BuildContext context, SubmissionStatus status) {
+     
+    String message = 'Störungsmeldung erfolgreich verarbeitet.';
+    if (status == SubmissionStatus.queuedOffline) {
+      message = 'Ihre Störungsmeldung wurde gespeichert und wird automatisch gesendet, sobald eine Internetverbindung verfügbar ist.';
+    } else if (status == SubmissionStatus.sentSuccess) {
+      message = 'Ihre Störungsmeldung wurde erfolgreich übermittelt. Wir werden uns in Kürze bei Ihnen melden.';
+    }
+     
+    // Zeige passende Nachricht an
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Störungsmeldung erfolgreich gesendet'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  Widget _buildErrorView(String errorMessage) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              color: Colors.red,
-              size: 60,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Ein Fehler ist aufgetreten',
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              errorMessage,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Provider.of<TroubleReportViewModel>(context, listen: false).reset();
-              },
-              child: const Text('Erneut versuchen'),
-            ),
-          ],
-        ),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: status == SubmissionStatus.queuedOffline ? Colors.orange : Colors.green,
+        duration: const Duration(seconds: 5),
       ),
     );
   }

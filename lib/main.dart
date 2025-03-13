@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'dart:io';
-import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:logging/logging.dart';
-import 'core/theme/app_theme.dart';
-import 'core/constants/app_constants.dart';
-import 'core/config/injection.dart';
+import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
 import 'core/config/app_config.dart';
 import 'core/config/env.dart';
+import 'core/config/injection.dart';
+import 'core/constants/app_constants.dart';
 import 'core/logging/app_logger.dart';
-import 'presentation/screens/login_screen.dart';
+import 'core/platform/platform_helper.dart';
+import 'core/theme/app_theme.dart';
+import 'core/network/network_info_facade.dart';
+import 'data/services/email_queue_service.dart';
 import 'presentation/common/widgets/offline_status_banner.dart';
+import 'presentation/screens/login_screen.dart';
 
 void main() async {
   // Initialisiere Flutter-Binding
@@ -87,12 +90,34 @@ Future<void> _initializeConfig() async {
   log.info('Konfiguration initialisiert');
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void dispose() {
+    // Falls ein Service-Locator verwendet wird, sollten globale Instanzen hier freigegeben werden
+    try {
+      final networkInfo = GetIt.I<NetworkInfoFacade>();
+      networkInfo.dispose();
+      
+      final emailQueueService = GetIt.I<EmailQueueService>();
+      emailQueueService.dispose();
+    } catch (e) {
+      // Diese Services könnten bereits entfernt worden sein
+      debugPrint('Fehler beim Freigeben von Ressourcen: $e');
+    }
+    
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isIOS) {
+    if (PlatformHelper.isIOS()) {
       return const CupertinoApp(
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
@@ -144,7 +169,7 @@ enum AppPlatform {
 /// 
 /// Diese Komponente umhüllt die gesamte App und zeigt ein Banner an,
 /// wenn keine Internetverbindung besteht.
-class OfflineAwareApp extends StatelessWidget {
+class OfflineAwareApp extends StatefulWidget {
   final Widget child;
   final AppPlatform platform;
   
@@ -155,13 +180,31 @@ class OfflineAwareApp extends StatelessWidget {
   }) : super(key: key);
   
   @override
+  State<OfflineAwareApp> createState() => _OfflineAwareAppState();
+}
+
+class _OfflineAwareAppState extends State<OfflineAwareApp> {
+  
+  @override
+  void initState() {
+    super.initState();
+  }
+  
+  @override
+  void dispose() {
+    // Clean resource disposal
+    getIt<EmailQueueService>().dispose();
+    super.dispose();
+  }
+  
+  @override
   Widget build(BuildContext context) {
     // Für iOS verwenden wir einen CupertinoScaffold
-    if (platform == AppPlatform.ios) {
+    if (widget.platform == AppPlatform.ios) {
       return CupertinoPageScaffold(
         navigationBar: null,
         child: OfflineStatusBanner(
-          child: child,
+          child: widget.child,
         ),
       );
     }
@@ -169,8 +212,9 @@ class OfflineAwareApp extends StatelessWidget {
     // Für Android verwenden wir einen MaterialScaffold
     return Scaffold(
       body: OfflineStatusBanner(
-        child: child,
+        child: widget.child,
       ),
     );
   }
-} 
+}
+

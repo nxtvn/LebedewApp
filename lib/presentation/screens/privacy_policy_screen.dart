@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/platform/platform_helper.dart';
 
 class PrivacyPolicyScreen extends StatefulWidget {
   static const String privacyPolicyUrl = 'https://lebedew.de/datenschutz/';
@@ -63,7 +63,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Platform.isIOS ? _buildIOSLayout() : _buildAndroidLayout();
+    return PlatformHelper.isIOS() ? _buildIOSLayout() : _buildAndroidLayout();
   }
 
   Widget _buildAndroidLayout() {
@@ -114,7 +114,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 24),
-            Platform.isIOS
+            PlatformHelper.isIOS()
                 ? CupertinoButton.filled(
                     child: const Text('Erneut versuchen'),
                     onPressed: () {
@@ -128,7 +128,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                     child: const Text('Erneut versuchen'),
                   ),
             const SizedBox(height: 16),
-            Platform.isIOS
+            PlatformHelper.isIOS()
                 ? CupertinoButton(
                     child: const Text('Im Browser öffnen'),
                     onPressed: () => PrivacyPolicyScreen.openInBrowser(),
@@ -147,7 +147,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
         WebViewWidget(controller: _controller),
         if (_isLoading)
           Center(
-            child: Platform.isIOS
+            child: PlatformHelper.isIOS()
                 ? const CupertinoActivityIndicator(radius: 16)
                 : const CircularProgressIndicator(),
           ),

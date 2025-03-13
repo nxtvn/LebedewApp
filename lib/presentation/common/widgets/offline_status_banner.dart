@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../../core/network/network_info_facade.dart';
 import '../../../core/config/injection.dart';
 
@@ -21,6 +22,7 @@ class OfflineStatusBanner extends StatefulWidget {
 class _OfflineStatusBannerState extends State<OfflineStatusBanner> {
   late final NetworkInfoFacade _networkInfo;
   bool _isOffline = false;
+  StreamSubscription? _networkSubscription;
   
   @override
   void initState() {
@@ -31,13 +33,22 @@ class _OfflineStatusBannerState extends State<OfflineStatusBanner> {
     _checkConnectionStatus();
     
     // Auf Änderungen des Netzwerkstatus hören
-    _networkInfo.isConnected.listen((isConnected) {
+    _networkSubscription = _networkInfo.isConnected.listen((isConnected) {
       if (mounted) {
         setState(() {
           _isOffline = !isConnected;
         });
       }
     });
+  }
+  
+  @override
+  void dispose() {
+    // StreamSubscription abmelden, um Memory Leaks zu vermeiden
+    // Dies ist wichtig, um sicherzustellen, dass der Netzwerk-Listener nicht aktiv bleibt,
+    // nachdem die Widget-Instanz entfernt wurde
+    _networkSubscription?.cancel();
+    super.dispose();
   }
   
   Future<void> _checkConnectionStatus() async {

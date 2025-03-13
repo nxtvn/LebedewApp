@@ -275,7 +275,18 @@ class EmailQueueService {
 
   /// Gibt Ressourcen frei
   void dispose() {
+    // Netzwerk-Subscription abmelden
     _networkSubscription?.cancel();
+    
+    // Speichere alle ausstehenden Änderungen, bevor die Instanz verworfen wird
+    if (_queue.isNotEmpty) {
+      _saveQueue();
+    }
+    
+    if (_simpleQueue.isNotEmpty) {
+      _saveSimpleQueue();
+    }
+    
     _log.info('E-Mail-Queue-Service beendet');
   }
 

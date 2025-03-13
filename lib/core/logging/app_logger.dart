@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:share_plus/share_plus.dart';
+import '../platform/platform_helper.dart';
 
 /// Eine zentrale Logging-Klasse für die gesamte App
 /// 
@@ -125,8 +126,8 @@ class AppLogger {
     log.info('Betriebssystem: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
     log.info('Gerät: ${Platform.localHostname}');
     log.info('Dart Version: ${Platform.version}');
-    log.info('Ist iOS: ${Platform.isIOS}');
-    log.info('Ist Android: ${Platform.isAndroid}');
+    log.info('Ist iOS: ${PlatformHelper.isIOS()}');
+    log.info('Ist Android: ${PlatformHelper.isAndroid()}');
     log.info('Anzahl Prozessoren: ${Platform.numberOfProcessors}');
     log.info('Locale: ${Platform.localeName}');
     log.info('=== Ende Systeminformationen ===');

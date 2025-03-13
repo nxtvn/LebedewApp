@@ -8,11 +8,24 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/network/network_info_facade.dart';
 import '../../../data/services/email_queue_service.dart';
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
 import 'base_viewmodel.dart';
+import '../../../core/platform/platform_helper.dart';
+import '../../../core/utils/error_handler.dart';
+
+/// Status der Berichtsübermittlung
+enum SubmissionStatus {
+  none,
+  sentSuccess,
+  queuedOffline,
+  error
+}
 
 /// ViewModel für die Störungsmeldung
 ///
@@ -22,6 +35,7 @@ import 'base_viewmodel.dart';
 class TroubleReportViewModel extends BaseViewModel {
   final TroubleReportRepository _repository;
   final ImagePicker _picker = ImagePicker();
+  static final _log = Logger('TroubleReportViewModel');
   
   // Formularfelder
   String? _name;
@@ -44,6 +58,14 @@ class TroubleReportViewModel extends BaseViewModel {
   String? _previousIssues;
   UrgencyLevel _urgencyLevel = UrgencyLevel.medium;
   bool _hasAcceptedTerms = false;
+
+  // Status der letzten Übermittlung
+  SubmissionStatus _lastSubmissionStatus = SubmissionStatus.none;
+  SubmissionStatus get lastSubmissionStatus => _lastSubmissionStatus;
+
+  // Fehlerbehandlung
+  AppError? _lastError;
+  AppError? get lastError => _lastError;
 
   /// Erstellt eine neue Instanz des TroubleReportViewModel
   TroubleReportViewModel(this._repository);
@@ -236,7 +258,11 @@ class TroubleReportViewModel extends BaseViewModel {
   /// Gibt true zurück, wenn die Störungsmeldung erfolgreich gesendet wurde, sonst false
   Future<bool> submitReport() async {
     if (!isValid) {
-      setError('Bitte füllen Sie alle erforderlichen Felder aus.');
+      _lastError = AppError(
+        type: AppErrorType.validation,
+        message: 'Bitte füllen Sie alle erforderlichen Felder aus.'
+      );
+      setError(_lastError!.message);
       return false;
     }
 
@@ -256,6 +282,8 @@ class TroubleReportViewModel extends BaseViewModel {
             _images.map((image) => image.path).toList(),
           );
           
+          // Setze explizite Offline-Erfolgsmeldung
+          _lastSubmissionStatus = SubmissionStatus.queuedOffline;
           return true; // Gib Erfolg zurück, da wir es später senden werden
         }
         
@@ -263,11 +291,16 @@ class TroubleReportViewModel extends BaseViewModel {
         final success = await _repository.submitReport(report, _images);
         
         if (!success) {
-          throw Exception('Die Störungsmeldung konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.');
+          _lastError = AppError(
+            type: AppErrorType.submission,
+            message: 'Die Störungsmeldung konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.'
+          );
+          throw _lastError!;
         }
         
+        _lastSubmissionStatus = SubmissionStatus.sentSuccess;
         return success;
-      } on SocketException {
+      } on SocketException catch (e, stackTrace) {
         // Speichere in Queue für später
         final report = createReport();
         await GetIt.I<EmailQueueService>().addToQueue(
@@ -275,8 +308,15 @@ class TroubleReportViewModel extends BaseViewModel {
           _images.map((image) => image.path).toList(),
         );
         
-        throw Exception('Keine Internetverbindung. Ihre Meldung wurde gespeichert und wird automatisch gesendet, sobald eine Verbindung verfügbar ist.');
-      } on TimeoutException {
+        _lastSubmissionStatus = SubmissionStatus.queuedOffline;
+        _lastError = AppError(
+          type: AppErrorType.network,
+          message: 'Keine Internetverbindung. Ihre Meldung wurde gespeichert und wird automatisch gesendet, sobald eine Verbindung verfügbar ist.',
+          exception: e,
+          stackTrace: stackTrace
+        );
+        throw _lastError!;
+      } on TimeoutException catch (e, stackTrace) {
         // Speichere in Queue für später
         final report = createReport();
         await GetIt.I<EmailQueueService>().addToQueue(
@@ -284,10 +324,19 @@ class TroubleReportViewModel extends BaseViewModel {
           _images.map((image) => image.path).toList(),
         );
         
-        throw Exception('Die Anfrage hat zu lange gedauert. Ihre Meldung wurde gespeichert und wird automatisch erneut gesendet.');
-      } catch (e) {
+        _lastSubmissionStatus = SubmissionStatus.queuedOffline;
+        _lastError = AppError(
+          type: AppErrorType.timeout,
+          message: 'Die Anfrage hat zu lange gedauert. Ihre Meldung wurde gespeichert und wird automatisch erneut gesendet.',
+          exception: e,
+          stackTrace: stackTrace
+        );
+        throw _lastError!;
+      } catch (e, stackTrace) {
         debugPrint('Fehler beim Senden der Störungsmeldung: $e');
-        throw Exception('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+        _lastSubmissionStatus = SubmissionStatus.error;
+        _lastError = AppError.fromException(e, stackTrace);
+        throw _lastError!;
       }
     }) ?? false;
   }
@@ -352,12 +401,12 @@ class TroubleReportViewModel extends BaseViewModel {
     // Always request permissions directly
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
-      Platform.isAndroid ? Permission.storage : Permission.photos,
+      PlatformHelper.isAndroid() ? Permission.storage : Permission.photos,
     ].request();
     
     // Check if permissions granted
     final cameraGranted = statuses[Permission.camera]!.isGranted;
-    final storageGranted = Platform.isAndroid 
+    final storageGranted = PlatformHelper.isAndroid() 
         ? statuses[Permission.storage]!.isGranted 
         : (statuses[Permission.photos]!.isGranted || statuses[Permission.photos]!.isLimited);
     
@@ -525,6 +574,7 @@ class TroubleReportViewModel extends BaseViewModel {
   /// Setzt alle Felder auf ihre Standardwerte zurück
   @override
   void reset() {
+    _lastError = null;
     super.reset();
     
     _type = RequestType.trouble;
@@ -549,5 +599,144 @@ class TroubleReportViewModel extends BaseViewModel {
     _images.clear();
     
     notifyListeners();
+  }
+  
+  /// Speichert den aktuellen Formularstatus in SharedPreferences
+  Future<void> saveFormState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final formData = {
+        'name': _name,
+        'email': _email,
+        'phone': _phone,
+        'address': _address,
+        'type': _type.name,
+        'description': _description,
+        'hasMaintenanceContract': _hasMaintenanceContract,
+        'customerNumber': _customerNumber,
+        'deviceModel': _deviceModel,
+        'manufacturer': _manufacturer,
+        'serialNumber': _serialNumber,
+        'errorCode': _errorCode,
+        'urgencyLevel': _urgencyLevel.name,
+        'occurrenceDate': _occurrenceDate?.toIso8601String(),
+        'serviceHistory': _serviceHistory,
+        'imagesPaths': _imagesPaths,
+        'energySources': _energySources.toList(),
+      };
+      
+      // Save as JSON
+      await prefs.setString('saved_trouble_report_form', jsonEncode(formData));
+      _log.info('Form state saved');
+    } catch (e) {
+      _log.warning('Error saving form state: $e');
+    }
+  }
+
+  /// Lädt gespeicherten Formularstatus aus SharedPreferences
+  Future<bool> loadFormState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('saved_trouble_report_form');
+      
+      if (jsonStr == null || jsonStr.isEmpty) {
+        return false;
+      }
+      
+      final formData = jsonDecode(jsonStr) as Map<String, dynamic>;
+      
+      // Set values
+      _name = formData['name'];
+      _email = formData['email'];
+      _phone = formData['phone'];
+      _address = formData['address'];
+      _type = RequestType.values.firstWhere(
+        (e) => e.name == formData['type'],
+        orElse: () => RequestType.trouble,
+      );
+      _description = formData['description'];
+      _hasMaintenanceContract = formData['hasMaintenanceContract'] ?? false;
+      _customerNumber = formData['customerNumber'];
+      _deviceModel = formData['deviceModel'];
+      _manufacturer = formData['manufacturer'];
+      _serialNumber = formData['serialNumber'];
+      _errorCode = formData['errorCode'];
+      _urgencyLevel = UrgencyLevel.values.firstWhere(
+        (e) => e.name == formData['urgencyLevel'],
+        orElse: () => UrgencyLevel.medium,
+      );
+      
+      if (formData['occurrenceDate'] != null) {
+        _occurrenceDate = DateTime.parse(formData['occurrenceDate']);
+      }
+      
+      _serviceHistory = formData['serviceHistory'];
+      
+      // Images
+      _imagesPaths.clear();
+      _images.clear();
+      if (formData['imagesPaths'] != null) {
+        final paths = List<String>.from(formData['imagesPaths']);
+        for (final path in paths) {
+          final file = File(path);
+          if (await file.exists()) {
+            _imagesPaths.add(path);
+            _images.add(file);
+          }
+        }
+      }
+      
+      // Energy sources
+      if (formData['energySources'] != null) {
+        _energySources = Set<String>.from(formData['energySources']);
+      }
+      
+      notifyListeners();
+      _log.info('Form state restored');
+      return true;
+    } catch (e) {
+      _log.warning('Error loading form state: $e');
+      return false;
+    }
+  }
+
+  /// Löscht gespeicherten Formularstatus
+  Future<void> clearSavedFormState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('saved_trouble_report_form');
+      _log.info('Saved form state deleted');
+    } catch (e) {
+      _log.warning('Error clearing form state: $e');
+    }
+  }
+
+  /// Setzt den letzten Fehler zurück
+  void clearLastError() {
+    _lastError = null;
+    // Verwende die vorhandene reset-Methode von BaseViewModel
+    reset();
+  }
+  
+  /// Führt Aufräumarbeiten durch, wenn das ViewModel nicht mehr benötigt wird
+  @override
+  void dispose() {
+    _log.info('TroubleReportViewModel wird entfernt');
+    
+    // Speichere Formularstatus vor dem Entfernen
+    saveFormState();
+    
+    // Gib Ressourcen frei
+    // ignore: unused_local_variable
+    for (final image in _images) {
+      try {
+        // Schließe alle Datei-Handles, die möglicherweise noch offen sind
+        // Dies ist proaktiv, da File-Objekte eigentlich keine explizite Freigabe benötigen
+      } catch (e) {
+        _log.warning('Fehler beim Freigeben von Bild-Ressourcen: $e');
+      }
+    }
+    
+    super.dispose();
   }
 } 

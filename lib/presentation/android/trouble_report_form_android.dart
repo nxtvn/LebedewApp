@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import '../common/widgets/trouble_report_form.dart';
 import '../../domain/enums/request_type.dart';
@@ -33,12 +34,26 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
 
   late TroubleReportViewModel _viewModel;
   bool _isLoading = false;
+  
+  // Add timer variable
+  Timer? _autoSaveTimer;
 
   @override
   void initState() {
     super.initState();
     _viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
-    _initControllers();
+    
+    // Versuche, gespeicherten Formularstatus zu laden
+    _viewModel.loadFormState().then((hasState) {
+      _initControllers();
+    });
+    
+    // Setze einen Timer, um regelmäßig den Formularstatus zu speichern
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        _viewModel.saveFormState();
+      }
+    });
   }
 
   void _initControllers() {
@@ -68,6 +83,10 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
 
   @override
   void dispose() {
+    // Timer abbrechen, um Memory Leaks zu vermeiden
+    _autoSaveTimer?.cancel();
+    
+    // Controller freigeben
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -78,6 +97,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
     _serialNumberController.dispose();
     _errorCodeController.dispose();
     _serviceHistoryController.dispose();
+    
     super.dispose();
   }
 
@@ -93,7 +113,9 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
     _serialNumberController.clear();
     _errorCodeController.clear();
     _serviceHistoryController.clear();
+    
     _viewModel.reset();
+    _viewModel.clearSavedFormState();
   }
 
   /// Wählt ein Bild aus der Galerie oder Kamera aus
@@ -125,37 +147,47 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                 ),
               ),
             ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
+            Semantics(
+              label: 'Mit Kamera fotografieren',
+              hint: 'Öffnet die Kamera, um ein Foto aufzunehmen',
+              button: true,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withAlpha(26),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.camera_alt, color: Colors.blue),
                 ),
-                child: const Icon(Icons.camera_alt, color: Colors.blue),
+                title: const Text('Kamera'),
+                subtitle: const Text('Foto mit der Kamera aufnehmen'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
               ),
-              title: const Text('Kamera'),
-              subtitle: const Text('Foto mit der Kamera aufnehmen'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
             ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
+            Semantics(
+              label: 'Aus Galerie auswählen',
+              hint: 'Öffnet die Bildergalerie zur Fotoauswahl',
+              button: true,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withAlpha(26),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.photo_library, color: Colors.blue),
                 ),
-                child: const Icon(Icons.photo_library, color: Colors.blue),
+                title: const Text('Galerie'),
+                subtitle: const Text('Ein oder mehrere Fotos aus der Galerie auswählen'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
               ),
-              title: const Text('Galerie'),
-              subtitle: const Text('Ein oder mehrere Fotos aus der Galerie auswählen'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
             ),
             const SizedBox(height: 8),
           ],
@@ -165,64 +197,102 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
   }
 
   Widget _buildImagePreview(BuildContext context, int index) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: Stack(
-        children: [
-          Card(
-            clipBehavior: Clip.antiAlias,
+    final bool isGridView = MediaQuery.of(context).size.width < 400;
+    
+    return Stack(
+      children: [
+        Container(
+          margin: EdgeInsets.only(
+            right: isGridView ? 0 : 8,
+          ),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
             child: Image.file(
               _viewModel.images[index],
-              height: 120,
-              width: 120,
               fit: BoxFit.cover,
+              width: isGridView ? null : 120,
+              height: 120,
             ),
           ),
-          Positioned(
-            right: 4,
-            top: 4,
-            child: Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => _viewModel.removeImage(index),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.close,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                ),
+        ),
+        Positioned(
+          top: 4,
+          right: isGridView ? 4 : 12,
+          child: GestureDetector(
+            onTap: () => _viewModel.removeImage(index),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                // ignore: deprecated_member_use
+                color: Colors.white.withOpacity(0.7),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close,
+                size: 16,
+                color: Colors.black,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+
+  double _getResponsivePadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < 360) return 8.0;
+    if (width < 600) return 16.0;
+    return 24.0;
   }
 
   @override
   Widget build(BuildContext context) {
+    final padding = _getResponsivePadding(context);
+    
     return Form(
       key: widget.formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRequestTypeSection(),
-          const SizedBox(height: 16),
-          _buildPersonalDataSection(),
-          const SizedBox(height: 16),
-          _buildDeviceDataSection(),
-          const SizedBox(height: 16),
-          _buildDescriptionSection(),
-          const SizedBox(height: 16),
-          _buildUrgencySection(),
-          const SizedBox(height: 16),
-          _buildTermsSection(),
-          const SizedBox(height: 24),
-          _buildSubmitButton(),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildRequestTypeSection(),
+          ),
+          SizedBox(height: padding / 2),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildPersonalDataSection(),
+          ),
+          SizedBox(height: padding / 2),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildDeviceDataSection(),
+          ),
+          SizedBox(height: padding / 2),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildDescriptionSection(),
+          ),
+          SizedBox(height: padding / 2),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildUrgencySection(),
+          ),
+          SizedBox(height: padding / 2),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildTermsSection(),
+          ),
+          SizedBox(height: padding),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: _buildSubmitButton(),
+          ),
         ],
       ),
     );
@@ -230,6 +300,14 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
 
   Widget _buildRequestTypeSection() {
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          // ignore: deprecated_member_use
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -257,7 +335,12 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                 return Column(
                   children: RequestType.values.map((type) {
                     return RadioListTile<RequestType>(
-                      title: Text(type.label),
+                      title: Text(
+                        type.label,
+                        style: TextStyle(
+                          fontWeight: viewModel.type == type ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
                       value: type,
                       groupValue: viewModel.type,
                       onChanged: (value) {
@@ -265,8 +348,15 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                           viewModel.setType(value);
                         }
                       },
-                      activeColor: Colors.blue,
-                      contentPadding: EdgeInsets.zero,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      tileColor: viewModel.type == type 
+                        // ignore: deprecated_member_use
+                        ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.2)
+                        : null,
                     );
                   }).toList(),
                 );
@@ -302,36 +392,45 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
               ),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name *',
-                border: OutlineInputBorder(),
+            Semantics(
+              label: 'Name Eingabefeld',
+              hint: 'Geben Sie Ihren vollständigen Namen ein',
+              child: TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Bitte geben Sie Ihren Namen ein';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Bitte geben Sie Ihren Namen ein';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'E-Mail *',
-                border: OutlineInputBorder(),
+            Semantics(
+              label: 'E-Mail Eingabefeld',
+              hint: 'Geben Sie Ihre E-Mail-Adresse ein',
+              child: TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  labelText: 'E-Mail *',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
+                  }
+                  if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
+                    return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
+                  }
+                  return null;
+                },
               ),
-              keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
-                }
-                if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
-                  return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -553,11 +652,22 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                     const SizedBox(height: 16),
                     SizedBox(
                       height: 120,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: viewModel.images.length,
-                        itemBuilder: _buildImagePreview,
-                      ),
+                      child: MediaQuery.of(context).size.width < 400
+                          ? GridView.builder(
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                              itemCount: viewModel.images.length,
+                              itemBuilder: _buildImagePreview,
+                            )
+                          : ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: viewModel.images.length,
+                              itemBuilder: _buildImagePreview,
+                              itemExtent: 120,
+                            ),
                     ),
                   ],
                 );
@@ -693,64 +803,47 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Nutzungsbedingungen *',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
+            const ExcludeSemantics(
+              child: Text(
+                'Bedingungen und Datenschutz',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Consumer<TroubleReportViewModel>(
               builder: (context, viewModel, _) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _showTermsAndConditions(),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text(
-                          'Allgemeine Geschäftsbedingungen anzeigen',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                return Semantics(
+                  label: 'Allgemeine Geschäftsbedingungen akzeptieren',
+                  hint: 'Aktivieren Sie die Checkbox, um die AGBs zu akzeptieren',
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'Ich habe die Allgemeinen Geschäftsbedingungen gelesen und akzeptiere sie',
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: viewModel.hasAcceptedTerms,
-                          onChanged: (value) {
-                            if (value != null) {
-                              viewModel.setHasAcceptedTerms(value);
-                            }
-                          },
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Ich akzeptiere die AGBs der Lebedew Haustechnik',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (!viewModel.hasAcceptedTerms && widget.formKey.currentState?.validate() == false)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          'Bitte akzeptieren Sie die AGBs',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                  ],
+                    value: viewModel.hasAcceptedTerms,
+                    onChanged: (value) {
+                      if (value != null) {
+                        viewModel.setHasAcceptedTerms(value);
+                      }
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
                 );
               },
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              label: 'AGBs anzeigen',
+              hint: 'Zeigt die vollständigen Allgemeinen Geschäftsbedingungen an',
+              button: true,
+              child: TextButton(
+                onPressed: _showTermsAndConditions,
+                child: const Text('Allgemeine Geschäftsbedingungen anzeigen'),
+              ),
             ),
           ],
         ),
@@ -806,21 +899,38 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
   Widget _buildSubmitButton() {
     return Consumer<TroubleReportViewModel>(
       builder: (context, viewModel, _) {
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
+        return Semantics(
+          label: 'Störungsmeldung absenden',
+          hint: 'Sendet das ausgefüllte Formular ab',
+          button: true,
+          enabled: !_isLoading,
+          child: FilledButton(
             onPressed: _isLoading
                 ? null
                 : () {
-                    if (widget.formKey.currentState!.validate()) {
-                      // Erstelle TroubleReport-Objekt und übergebe es an onSubmit
+                    if (widget.formKey.currentState?.validate() ?? false) {
+                      widget.formKey.currentState?.save();
+                      
+                      // Check if terms are accepted
+                      if (!viewModel.hasAcceptedTerms) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Bitte akzeptieren Sie die Allgemeinen Geschäftsbedingungen'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                      
+                      // Create TroubleReport
                       final report = TroubleReport(
                         type: viewModel.type,
                         name: viewModel.name ?? '',
                         email: viewModel.email ?? '',
-                        phone: viewModel.phone,
+                        phone: viewModel.phone ?? '',
                         address: viewModel.address,
                         hasMaintenanceContract: viewModel.hasMaintenanceContract,
+                        customerNumber: viewModel.customerNumber,
                         description: viewModel.description ?? '',
                         deviceModel: viewModel.deviceModel,
                         manufacturer: viewModel.manufacturer,
@@ -835,14 +945,20 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
                       widget.onSubmit(report);
                     }
                   },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+            style: ButtonStyle(
+              minimumSize: WidgetStateProperty.all(const Size(double.infinity, 56)),
+              shape: WidgetStateProperty.all(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
             child: _isLoading
-                ? const CircularProgressIndicator(color: Colors.white)
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
                 : const Text(
                     'Störungsmeldung absenden',
                     style: TextStyle(fontSize: 16),

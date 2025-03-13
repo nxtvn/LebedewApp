@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+import 'dart:async';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import '../common/widgets/trouble_report_form.dart';
 import '../../domain/entities/trouble_report.dart';
@@ -45,13 +46,29 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   
   // Logger für diese Klasse
   final _log = AppLogger.getLogger('TroubleReportFormIOS');
+  
+  // Add timer variable
+  Timer? _autoSaveTimer;
 
   @override
   void initState() {
     super.initState();
     _log.info('TroubleReportFormIOS initialisiert');
     _viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
-    _initControllers();
+    
+    // Versuche, gespeicherten Formularstatus zu laden
+    _viewModel.loadFormState().then((hasState) {
+      _initControllers();
+      _log.info('Formularstatus geladen: ${hasState ? 'erfolgreich' : 'kein gespeicherter Status'}');
+    });
+    
+    // Setze einen Timer, um regelmäßig den Formularstatus zu speichern
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        _viewModel.saveFormState();
+        _log.info('Formularstatus automatisch gespeichert');
+      }
+    });
   }
 
   void _initControllers() {
@@ -86,6 +103,10 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   void dispose() {
     _log.info('TroubleReportFormIOS wird entfernt');
     
+    // Timer abbrechen, um Memory Leaks zu vermeiden
+    _autoSaveTimer?.cancel();
+    
+    // Controller freigeben
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -115,38 +136,54 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     _serviceHistoryController.clear();
     _customerNumberController.clear();
     _selectedDate = null;
+    
     _viewModel.reset();
+    _viewModel.clearSavedFormState();
+    _log.info('Formular zurückgesetzt und gespeicherte Daten gelöscht');
   }
 
   /// Zeigt die Optionen zur Bildauswahl an
   void _showImagePickerOptions() {
-    _log.info('Bildauswahl-Optionen angezeigt');
-    
     showCupertinoModalPopup(
       context: context,
       builder: (context) => CupertinoActionSheet(
-        title: const Text('Bild hinzufügen'),
+        title: const Text('Foto hinzufügen'),
         message: const Text('Wählen Sie eine Option'),
         actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _pickImage(ImageSource.camera);
-            },
-            child: const Text('Kamera'),
+          Semantics(
+            label: 'Mit Kamera fotografieren',
+            hint: 'Öffnet die Kamera, um ein Foto aufzunehmen',
+            button: true,
+            child: CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+              child: const Text('Kamera verwenden'),
+            ),
           ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _pickImage(ImageSource.gallery);
-            },
-            child: const Text('Galerie'),
+          Semantics(
+            label: 'Aus Galerie auswählen',
+            hint: 'Öffnet die Bildergalerie zur Fotoauswahl',
+            button: true,
+            child: CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+              child: const Text('Aus Galerie auswählen'),
+            ),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          isDestructiveAction: true,
-          child: const Text('Abbrechen'),
+        cancelButton: Semantics(
+          label: 'Abbrechen',
+          hint: 'Schließt dieses Menü ohne Auswahl',
+          button: true,
+          child: CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
         ),
       ),
     );
@@ -426,8 +463,6 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     );
   }
 
-
-
   /// Fallback-Methode für Bildupload, wenn normale Methoden fehlschlagen
   void _showManualUploadOption() {
     showCupertinoDialog(
@@ -497,161 +532,76 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     );
   }
 
+
   Widget _buildImagePreview(BuildContext context, int index) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: () => _showFullScreenImage(index),
+    final bool isGridView = MediaQuery.of(context).size.width < 400;
+    
+    return Stack(
+      children: [
+        Container(
+          margin: EdgeInsets.only(
+            right: isGridView ? 0 : 8,
+          ),
+          decoration: BoxDecoration(
+            border: Border.all(color: CupertinoColors.systemGrey4),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.file(
+              _viewModel.images[index],
+              fit: BoxFit.cover,
+              width: isGridView ? null : 120,
+              height: 120,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: isGridView ? 4 : 12,
+          child: GestureDetector(
+            onTap: () => _viewModel.removeImage(index),
             child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: CupertinoColors.systemGrey4),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.systemGrey.withAlpha(51),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: CupertinoColors.white,
+                shape: BoxShape.circle,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  children: [
-                    Image.file(
-                      _viewModel.images[index],
-                      height: 100,
-                      width: 100,
-                      fit: BoxFit.cover,
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        color: CupertinoColors.black.withAlpha(128),
-                        child: const Center(
-                          child: Icon(
-                            CupertinoIcons.fullscreen,
-                            color: CupertinoColors.white,
-                            size: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 4,
-            top: 4,
-            child: GestureDetector(
-              onTap: () => _confirmImageRemoval(index),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CupertinoColors.systemGrey.withAlpha(77),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  CupertinoIcons.clear_circled_solid,
-                  size: 16,
-                  color: CupertinoColors.destructiveRed,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Zeigt ein Bild im Vollbildmodus an
-  void _showFullScreenImage(int index) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (context) => CupertinoPageScaffold(
-        navigationBar: CupertinoNavigationBar(
-          middle: const Text('Bildvorschau'),
-          trailing: CupertinoButton(
-            padding: EdgeInsets.zero,
-            child: const Text('Fertig'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Image.file(
-                _viewModel.images[index],
-                fit: BoxFit.contain,
+              child: const Icon(
+                CupertinoIcons.clear_circled_solid,
+                size: 16,
+                color: CupertinoColors.systemRed,
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
-  /// Bestätigt das Entfernen eines Bildes
-  void _confirmImageRemoval(int index) {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Bild entfernen'),
-        content: const Text('Möchten Sie dieses Bild wirklich entfernen?'),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Abbrechen'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text('Entfernen'),
-            onPressed: () {
-              Navigator.of(context).pop();
-              setState(() {
-                _viewModel.removeImage(index);
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
+    final padding = _getResponsivePadding(context);
+    
     return Form(
       key: widget.formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildRequestTypeSection(),
-          const SizedBox(height: 16),
+          SizedBox(height: padding / 2),
           _buildPersonalDataSection(),
-          const SizedBox(height: 16),
+          SizedBox(height: padding / 2),
           _buildDeviceDataSection(),
-          const SizedBox(height: 16),
+          SizedBox(height: padding / 2),
           _buildDescriptionSection(),
-          const SizedBox(height: 16),
+          SizedBox(height: padding / 2),
           _buildUrgencySection(),
-          const SizedBox(height: 16),
+          SizedBox(height: padding / 2),
           _buildTermsSection(),
+          SizedBox(height: padding),
+          _buildSubmitButton(),
         ],
       ),
     );
@@ -660,110 +610,100 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   Widget _buildRequestTypeSection() {
     return CupertinoFormSection.insetGrouped(
       header: const Text('Art des Anliegens *'),
-      footer: const Text('Wählen Sie die passende Kategorie'),
-      children: [
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            // Erstelle eine Map für den CupertinoSegmentedControl
-            final Map<RequestType, Widget> requestTypeSegments = {};
-            
-            // Füge für jeden RequestType ein Widget zur Map hinzu
-            for (var type in RequestType.values) {
-              requestTypeSegments[type] = Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon je nach RequestType
-                    Icon(
-                      _getIconForRequestType(type),
-                      color: viewModel.type == type 
-                          ? CupertinoColors.white 
-                          : CupertinoColors.activeBlue,
-                      size: 20,
-                    ),
-                    const SizedBox(height: 4),
-                    // Label
-                    Text(
-                      type.label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: viewModel.type == type 
-                            ? CupertinoColors.white 
-                            : CupertinoColors.label.resolveFrom(context),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }
-            
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-              child: CupertinoFormRow(
-                child: CupertinoSegmentedControl<RequestType>(
-                  children: requestTypeSegments,
-                  groupValue: viewModel.type,
-                  onValueChanged: (RequestType value) {
-                    viewModel.setType(value);
-                  },
-                  padding: const EdgeInsets.all(4),
-                ),
-              ),
-            );
-          },
-        ),
-        // Zeige eine Beschreibung des ausgewählten Typs an
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            return CupertinoFormRow(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6.resolveFrom(context),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: CupertinoColors.systemGrey4.resolveFrom(context),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          _getIconForRequestType(viewModel.type),
-                          color: CupertinoColors.activeBlue,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          viewModel.type.label,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: CupertinoColors.activeBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _getDescriptionForRequestType(viewModel.type),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: CupertinoColors.label.resolveFrom(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+      footer: const Text('Wählen Sie die entsprechende Kategorie'),
+      margin: _getResponsiveMargin(context),
+      children: _buildRequestTypeOptions(),
     );
+  }
+
+  List<Widget> _buildRequestTypeOptions() {
+    final Map<RequestType, Widget> requestTypeSegments = <RequestType, Widget>{};
+    
+    for (var type in RequestType.values) {
+      requestTypeSegments[type] = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getIconForRequestType(type),
+              color: _viewModel.type == type 
+                  ? CupertinoColors.white 
+                  : CupertinoColors.activeBlue,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              type.label,
+              style: TextStyle(
+                fontSize: 12,
+                color: _viewModel.type == type 
+                    ? CupertinoColors.white 
+                    : CupertinoColors.label.resolveFrom(context),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        child: CupertinoFormRow(
+          child: CupertinoSegmentedControl<RequestType>(
+            children: requestTypeSegments,
+            groupValue: _viewModel.type,
+            onValueChanged: (RequestType value) {
+              _viewModel.setType(value);
+            },
+            padding: const EdgeInsets.all(4),
+          ),
+        ),
+      ),
+      CupertinoFormRow(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGrey6.resolveFrom(context),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: CupertinoColors.systemGrey4.resolveFrom(context),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    _getIconForRequestType(_viewModel.type),
+                    color: CupertinoColors.activeBlue,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _viewModel.type.label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: CupertinoColors.activeBlue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _getDescriptionForRequestType(_viewModel.type),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
   }
 
   // Hilfsmethode, um das passende Icon für jeden RequestType zu erhalten
@@ -792,41 +732,12 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   Widget _buildPersonalDataSection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Persönliche Daten'),
-      footer: const Text('Ihre Kontaktinformationen'),
+      header: const Text('Persönliche Daten *'),
+      footer: const Text('Bitte geben Sie Ihre Kontaktdaten an, damit wir Sie bei Rückfragen erreichen können.'),
+      margin: _getResponsiveMargin(context),
       children: [
-        CupertinoFormRow(
-          prefix: const Text('Name *'),
-          child: CupertinoTextFormFieldRow(
-            controller: _nameController,
-            placeholder: 'Name eingeben',
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Bitte geben Sie Ihren Namen ein';
-              }
-              return null;
-            },
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-          ),
-        ),
-        CupertinoFormRow(
-          prefix: const Text('E-Mail *'),
-          child: CupertinoTextFormFieldRow(
-            controller: _emailController,
-            placeholder: 'E-Mail eingeben',
-            keyboardType: TextInputType.emailAddress,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
-              }
-              if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
-                return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
-              }
-              return null;
-            },
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-          ),
-        ),
+        _buildNameField(),
+        _buildEmailField(),
         CupertinoFormRow(
           prefix: const Text('Telefon *'),
           child: CupertinoTextFormFieldRow(
@@ -854,10 +765,61 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     );
   }
 
+  Widget _buildNameField() {
+    return Semantics(
+      label: 'Name Eingabefeld',
+      hint: 'Geben Sie Ihren vollständigen Namen ein',
+      child: CupertinoTextFormFieldRow(
+        controller: _nameController,
+        prefix: const Text('Name'),
+        placeholder: 'Ihr vollständiger Name',
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Bitte geben Sie Ihren Namen ein';
+          }
+          return null;
+        },
+        decoration: BoxDecoration(
+          border: Border.all(color: CupertinoColors.systemGrey4),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmailField() {
+    return Semantics(
+      label: 'E-Mail Eingabefeld',
+      hint: 'Geben Sie Ihre E-Mail-Adresse ein',
+      child: CupertinoTextFormFieldRow(
+        controller: _emailController,
+        prefix: const Text('E-Mail'),
+        placeholder: 'Ihre E-Mail-Adresse',
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        keyboardType: TextInputType.emailAddress,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Bitte geben Sie Ihre E-Mail-Adresse ein';
+          }
+          if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
+            return 'Bitte geben Sie eine gültige E-Mail-Adresse ein';
+          }
+          return null;
+        },
+        decoration: BoxDecoration(
+          border: Border.all(color: CupertinoColors.systemGrey4),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDeviceDataSection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Gerätedaten'),
-      footer: const Text('Informationen zum betroffenen Gerät'),
+      header: const Text('Geräteinformationen'),
+      footer: const Text('Geben Sie hier Informationen zum betroffenen Gerät an.'),
+      margin: _getResponsiveMargin(context),
       children: [
         CupertinoFormRow(
           prefix: const Text('Gerätemodell'),
@@ -958,8 +920,9 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   Widget _buildDescriptionSection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Störungsbeschreibung'),
-      footer: const Text('Beschreiben Sie das Problem so genau wie möglich'),
+      header: const Text('Beschreibung *'),
+      footer: const Text('Beschreiben Sie das Problem so detailliert wie möglich.'),
+      margin: _getResponsiveMargin(context),
       children: [
         CupertinoFormRow(
           child: CupertinoTextFormFieldRow(
@@ -1065,216 +1028,284 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   Widget _buildUrgencySection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Dringlichkeit *'),
-      footer: const Text('Wie dringend benötigen Sie Unterstützung?'),
-      children: [
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            return CupertinoFormRow(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: UrgencyLevel.values.map((level) {
-                    Color color;
-                    IconData icon;
-                    
-                    switch (level) {
-                      case UrgencyLevel.low:
-                        color = CupertinoColors.systemGreen;
-                        icon = CupertinoIcons.info;
-                        break;
-                      case UrgencyLevel.medium:
-                        color = CupertinoColors.systemOrange;
-                        icon = CupertinoIcons.exclamationmark_triangle;
-                        break;
-                      case UrgencyLevel.high:
-                        color = CupertinoColors.systemRed;
-                        icon = CupertinoIcons.exclamationmark_circle;
-                        break;
-                    }
-                    
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => viewModel.setUrgencyLevel(level),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: viewModel.urgencyLevel == level
-                                ? color.withAlpha(20)
-                                : CupertinoColors.systemGrey6.resolveFrom(context),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: viewModel.urgencyLevel == level
-                                  ? color
-                                  : CupertinoColors.systemGrey4.resolveFrom(context),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(icon, color: color, size: 24),
-                              const SizedBox(height: 8),
-                              Text(
-                                level.label,
-                                style: TextStyle(
-                                  fontWeight: viewModel.urgencyLevel == level
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: viewModel.urgencyLevel == level
-                                      ? color
-                                      : null,
-                                ),
-                              ),
-                            ],
+      header: const Text('Dringlichkeit'),
+      footer: const Text('Wählen Sie die Dringlichkeit des Problems.'),
+      margin: _getResponsiveMargin(context),
+      children: _buildUrgencyLevelPicker(),
+    );
+  }
+
+  List<Widget> _buildUrgencyLevelPicker() {
+    return [
+      CupertinoFormRow(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            children: UrgencyLevel.values.map((level) {
+              Color color;
+              IconData icon;
+              
+              switch (level) {
+                case UrgencyLevel.low:
+                  color = CupertinoColors.systemGreen;
+                  icon = CupertinoIcons.info;
+                  break;
+                case UrgencyLevel.medium:
+                  color = CupertinoColors.systemOrange;
+                  icon = CupertinoIcons.exclamationmark_triangle;
+                  break;
+                case UrgencyLevel.high:
+                  color = CupertinoColors.systemRed;
+                  icon = CupertinoIcons.exclamationmark_circle;
+                  break;
+              }
+              
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => _viewModel.setUrgencyLevel(level),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _viewModel.urgencyLevel == level
+                          ? color.withAlpha(20)
+                          : CupertinoColors.systemGrey6.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _viewModel.urgencyLevel == level
+                            ? color
+                            : CupertinoColors.systemGrey4.resolveFrom(context),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(icon, color: color, size: 24),
+                        const SizedBox(height: 8),
+                        Text(
+                          level.label,
+                          style: TextStyle(
+                            fontWeight: _viewModel.urgencyLevel == level
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: _viewModel.urgencyLevel == level
+                                ? color
+                                : null,
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            }).toList(),
+          ),
         ),
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            Color color;
-            final urgencyLevel = viewModel.urgencyLevel;
-            
-            switch (urgencyLevel) {
-              case UrgencyLevel.low:
-                color = CupertinoColors.systemGreen;
-                break;
-              case UrgencyLevel.medium:
-                color = CupertinoColors.systemOrange;
-                break;
-              case UrgencyLevel.high:
-                color = CupertinoColors.systemRed;
-                break;
-            }
-            
-            return CupertinoFormRow(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withAlpha(10),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withAlpha(30)),
-                ),
-                child: Text(
-                  urgencyLevel.description,
-                  style: TextStyle(color: color),
-                ),
-              ),
-            );
-          },
+      ),
+      CupertinoFormRow(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _getUrgencyColor().withAlpha(10),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _getUrgencyColor().withAlpha(30)),
+          ),
+          child: Text(
+            _viewModel.urgencyLevel.description,
+            style: TextStyle(color: _getUrgencyColor()),
+          ),
         ),
-      ],
-    );
+      ),
+    ];
+  }
+  
+  Color _getUrgencyColor() {
+    switch (_viewModel.urgencyLevel) {
+      case UrgencyLevel.low:
+        return CupertinoColors.systemGreen;
+      case UrgencyLevel.medium:
+        return CupertinoColors.systemOrange;
+      case UrgencyLevel.high:
+        return CupertinoColors.systemRed;
+    }
   }
 
   Widget _buildTermsSection() {
     return CupertinoFormSection.insetGrouped(
-      header: const Text('Nutzungsbedingungen *'),
-      footer: const Text('Sie müssen die AGBs akzeptieren, um fortzufahren'),
+      header: const Text('Zustimmung'),
+      footer: const Text('Bitte stimmen Sie den Nutzungsbedingungen zu, um fortzufahren.'),
+      margin: _getResponsiveMargin(context),
       children: [
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            return CupertinoFormRow(
-              prefix: const Text('AGBs akzeptieren *'),
-              error: !viewModel.hasAcceptedTerms && widget.formKey.currentState?.validate() == false
-                  ? const Text('Bitte akzeptieren Sie die AGBs', style: TextStyle(color: CupertinoColors.destructiveRed))
-                  : null,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: () => _showTermsAndConditions(),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12.0),
-                      child: Text(
-                        'Ich akzeptiere die AGBs der Lebedew Haustechnik',
-                        style: TextStyle(
-                          color: CupertinoColors.activeBlue,
-                          decoration: TextDecoration.underline,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Akzeptieren'),
-                      CupertinoSwitch(
-                        value: viewModel.hasAcceptedTerms,
-                        onChanged: (value) => viewModel.setHasAcceptedTerms(value),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+        _buildTermsAcceptanceRow(),
       ],
     );
   }
 
-  void _showTermsAndConditions() {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (context) => CupertinoPageScaffold(
-        navigationBar: CupertinoNavigationBar(
-          middle: const Text('Allgemeine Geschäftsbedingungen'),
-          trailing: CupertinoButton(
-            padding: EdgeInsets.zero,
-            child: const Text('Schließen'),
-            onPressed: () => Navigator.of(context).pop(),
+  Widget _buildTermsAcceptanceRow() {
+    return Semantics(
+      label: 'Allgemeine Geschäftsbedingungen akzeptieren',
+      hint: 'Aktivieren Sie die Checkbox, um die AGBs zu akzeptieren',
+      child: Row(
+        children: [
+          CupertinoCheckbox(
+            value: _viewModel.hasAcceptedTerms,
+            onChanged: (value) {
+              if (value != null) {
+                _viewModel.setHasAcceptedTerms(value);
+              }
+            },
           ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Allgemeine Geschäftsbedingungen der Lebedew Haustechnik',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _viewModel.setHasAcceptedTerms(!_viewModel.hasAcceptedTerms),
+              child: Text(
+                'Ich habe die Allgemeinen Geschäftsbedingungen gelesen und akzeptiere sie',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: CupertinoColors.label.resolveFrom(context),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  '1. Geltungsbereich\n\n'
-                  'Diese Allgemeinen Geschäftsbedingungen gelten für alle Verträge, Lieferungen und sonstigen Leistungen der Lebedew Haustechnik (nachfolgend "Anbieter" genannt) gegenüber ihren Kunden.\n\n'
-                  '2. Vertragsschluss\n\n'
-                  'Mit Absenden einer Störungsmeldung über die App gibt der Kunde ein Angebot zum Abschluss eines Vertrages ab. Der Vertrag kommt zustande, wenn der Anbieter dieses Angebot annimmt.\n\n'
-                  '3. Leistungen\n\n'
-                  'Der Anbieter erbringt Leistungen im Bereich der Haustechnik, insbesondere Reparatur-, Wartungs- und Installationsarbeiten.\n\n'
-                  '4. Preise und Zahlungsbedingungen\n\n'
-                  'Die Preise für die Leistungen des Anbieters richten sich nach der jeweils aktuellen Preisliste. Die Zahlung erfolgt nach Rechnungsstellung.\n\n'
-                  '5. Datenschutz\n\n'
-                  'Der Anbieter erhebt, verarbeitet und nutzt personenbezogene Daten des Kunden gemäß den geltenden Datenschutzbestimmungen. Weitere Informationen finden Sie in unserer Datenschutzerklärung.\n\n'
-                  '6. Schlussbestimmungen\n\n'
-                  'Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist, soweit gesetzlich zulässig, der Sitz des Anbieters.',
-                  style: TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 20),
-                Center(
-                  child: CupertinoButton.filled(
-                    child: const Text('Zurück zum Formular'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+
+  /// Zeigt einen Validierungsfehler-Dialog an
+  void _showValidationErrorDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Eingabefehler'),
+        content: Semantics(
+          label: 'Formularvalidierungsfehler',
+          liveRegion: true,
+          child: const Text('Bitte füllen Sie alle erforderlichen Felder korrekt aus.'),
+        ),
+        actions: [
+          Semantics(
+            label: 'Verstanden',
+            hint: 'Schließt diese Fehlermeldung',
+            button: true,
+            child: CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Zeigt einen Fehler-Dialog für nicht akzeptierte AGBs an
+  void _showTermsNotAcceptedError() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('AGBs nicht akzeptiert'),
+        content: Semantics(
+          label: 'AGBs Validierungsfehler',
+          liveRegion: true,
+          child: const Text('Bitte akzeptieren Sie die Allgemeinen Geschäftsbedingungen, um fortzufahren.'),
+        ),
+        actions: [
+          Semantics(
+            label: 'Verstanden',
+            hint: 'Schließt diese Fehlermeldung',
+            button: true,
+            child: CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Füge diese Methode zur Validierung und Übermittlung des Formulars hinzu
+  void _validateAndSubmit(TroubleReportViewModel viewModel) {
+    if (widget.formKey.currentState?.validate() ?? false) {
+      widget.formKey.currentState?.save();
+      
+      // Prüfe, ob die AGBs akzeptiert wurden
+      if (!viewModel.hasAcceptedTerms) {
+        _showTermsNotAcceptedError();
+        return;
+      }
+      
+      // Erstelle TroubleReport-Objekt
+      final report = TroubleReport(
+        type: viewModel.type,
+        name: viewModel.name ?? '',
+        email: viewModel.email ?? '',
+        phone: viewModel.phone ?? '',
+        address: viewModel.address,
+        hasMaintenanceContract: viewModel.hasMaintenanceContract,
+        customerNumber: viewModel.customerNumber,
+        description: viewModel.description ?? '',
+        deviceModel: viewModel.deviceModel,
+        manufacturer: viewModel.manufacturer,
+        serialNumber: viewModel.serialNumber,
+        errorCode: viewModel.errorCode,
+        energySources: viewModel.energySources,
+        occurrenceDate: viewModel.occurrenceDate,
+        serviceHistory: viewModel.serviceHistory,
+        urgencyLevel: viewModel.urgencyLevel,
+        imagesPaths: viewModel.imagesPaths,
+        hasAcceptedTerms: viewModel.hasAcceptedTerms,
+      );
+      
+      // Sende den Bericht
+      widget.onSubmit(report);
+    } else {
+      _showValidationErrorDialog();
+    }
+  }
+
+  Widget _buildSubmitButton() {
+    return Semantics(
+      label: 'Störungsmeldung absenden',
+      hint: 'Sendet das ausgefüllte Formular ab',
+      button: true,
+      enabled: !_isLoading,
+      child: CupertinoButton.filled(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        onPressed: _isLoading ? null : () => _validateAndSubmit(_viewModel),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(CupertinoIcons.paperplane, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Störungsmeldung absenden',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  // Hilfsmethode für responsive Abstände
+  double _getResponsivePadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < 360) return 8.0;
+    if (width < 600) return 16.0;
+    return 24.0;
+  }
+
+  // Hilfsmethode für responsive Ränder in CupertinoFormSection
+  EdgeInsetsGeometry _getResponsiveMargin(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return EdgeInsets.symmetric(
+      horizontal: width < 600 ? 16.0 : 24.0,
+      vertical: 8.0
     );
   }
 } 

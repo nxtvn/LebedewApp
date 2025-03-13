@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
-import '../common/widgets/trouble_report_form_android.dart';
-import '../common/widgets/trouble_report_form_ios.dart';
+import '../android/trouble_report_form_android.dart';
+import '../ios/trouble_report_form_ios.dart';
 import '../../core/platform/platform_helper.dart';
 
 class CreateTroubleReportPage extends StatelessWidget {

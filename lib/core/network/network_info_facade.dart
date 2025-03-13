@@ -14,6 +14,10 @@ class NetworkInfoFacade {
   final _connectionStatusController = StreamController<bool>.broadcast();
   bool _lastKnownStatus = false;
   
+  Timer? _periodicCheckTimer;
+  Timer? _connectedCheckTimer;
+  StreamSubscription? _connectivitySubscription;
+  
   /// Erstellt eine neue Instanz der NetworkInfoFacade
   /// 
   /// Initialisiert die Überwachung des Netzwerkstatus und startet die Überprüfung
@@ -25,13 +29,20 @@ class NetworkInfoFacade {
     _checkConnection();
     
     // Listen to connectivity changes
-    _connectivity.onConnectivityChanged.listen((result) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((result) {
       _log.info('Konnektivitätsänderung erkannt: $result');
       _checkConnection();
     });
     
     // Periodically check actual internet connectivity
-    Timer.periodic(const Duration(minutes: 2), (_) => _checkConnection());
+    _periodicCheckTimer = Timer.periodic(const Duration(minutes: 2), (_) => _checkConnection());
+    
+    // Increase check frequency when connected (every 30 seconds instead of 2 minutes)
+    _connectedCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_lastKnownStatus) {
+        _checkConnection();
+      }
+    });
   }
   
   /// Stream, der Änderungen des Netzwerkstatus meldet
@@ -44,21 +55,35 @@ class NetworkInfoFacade {
   /// Diese Methode prüft nicht nur die Netzwerkschnittstelle, sondern
   /// versucht auch, eine tatsächliche Internetverbindung zu verifizieren.
   Future<bool> get isCurrentlyConnected async {
-    // First check if we have any connectivity
-    final connectivityResult = await _connectivity.checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
+    try {
+      // Check basic connectivity
+      final connectivityResult = await _connectivity.checkConnectivity();
+      if (connectivityResult == ConnectivityResult.none) {
+        return false;
+      }
+      
+      // Enhanced robustness check with timeout
+      return await _connectionChecker.hasConnection.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          _log.warning('Timeout during connection check');
+          return false;
+        },
+      );
+    } catch (e) {
+      _log.warning('Error checking internet connection: $e');
       return false;
     }
-    
-    // Then verify actual internet connectivity
-    try {
-      final hasInternet = await _connectionChecker.hasConnection;
-      return hasInternet;
-    } catch (e) {
-      _log.warning('Fehler bei der Überprüfung der Internetverbindung', e);
-      // Fall back to connectivity result if checker fails
-      return true;
-    }
+  }
+  
+  /// Registriert einen Listener für Änderungen des Verbindungsstatus
+  /// 
+  /// Der Listener wird sofort mit dem aktuellen Status aufgerufen und dann
+  /// jedes Mal, wenn sich der Verbindungsstatus ändert.
+  void addConnectionStatusListener(void Function(bool isConnected) listener) {
+    _connectionStatusController.stream.listen(listener);
+    // Immediately inform about current status
+    isCurrentlyConnected.then(listener);
   }
   
   /// Überprüft die aktuelle Verbindung und benachrichtigt Abonnenten bei Änderungen
@@ -89,6 +114,17 @@ class NetworkInfoFacade {
   /// Gibt Ressourcen frei
   void dispose() {
     _log.info('Beende NetworkInfoFacade');
-    _connectionStatusController.close();
+    
+    // StreamController schließen
+    if (!_connectionStatusController.isClosed) {
+      _connectionStatusController.close();
+    }
+    
+    // Timer abbrechen
+    _periodicCheckTimer?.cancel();
+    _connectedCheckTimer?.cancel();
+    
+    // StreamSubscription abmelden
+    _connectivitySubscription?.cancel();
   }
 } 

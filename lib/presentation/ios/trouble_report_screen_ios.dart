@@ -4,14 +4,24 @@ import 'package:provider/provider.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import 'trouble_report_form_ios.dart';
 import '../../domain/entities/trouble_report.dart';
+import '../../core/utils/error_handler.dart';
+import '../../data/repositories/trouble_report_repository_impl.dart';
+import '../../domain/services/email_service.dart';
+import '../../domain/services/image_storage_service.dart';
 
 class TroubleReportScreenIOS extends StatelessWidget {
   const TroubleReportScreenIOS({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Services aus dem GetIt Container holen
+    final emailService = GetIt.instance<EmailService>();
+    final imageStorageService = GetIt.instance<ImageStorageService>();
+    
     return ChangeNotifierProvider<TroubleReportViewModel>(
-      create: (context) => GetIt.I<TroubleReportViewModel>(),
+      create: (context) => TroubleReportViewModel(
+        TroubleReportRepositoryImpl(emailService, imageStorageService)
+      ),
       child: const _TroubleReportView(),
     );
   }
@@ -30,26 +40,34 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Störungsmeldung'),
-        previousPageTitle: 'Zurück',
-      ),
-      child: SafeArea(
-        bottom: true,
-        child: Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, child) {
-            if (viewModel.isLoading) {
-              return _buildLoadingView();
-            } else if (viewModel.hasError) {
-              return _buildErrorView(viewModel.errorMessage);
-            } else {
-              return _buildFormView(viewModel);
-            }
-          },
-        ),
-      ),
+    return Consumer<TroubleReportViewModel>(
+      builder: (context, viewModel, child) {
+        return CupertinoPageScaffold(
+          navigationBar: const CupertinoNavigationBar(
+            middle: Text('Störungsmeldung'),
+          ),
+          child: SafeArea(
+            child: _buildContent(viewModel),
+          ),
+        );
+      },
     );
+  }
+
+  Widget _buildContent(TroubleReportViewModel viewModel) {
+    if (viewModel.isLoading) {
+      return _buildLoadingView();
+    }
+    
+    if (viewModel.lastError != null) {
+      return AppErrorHandler.buildErrorWidget(
+        context, 
+        viewModel.lastError!,
+        onRetry: () => viewModel.clearLastError(),
+      );
+    }
+    
+    return _buildFormView(viewModel);
   }
 
   Widget _buildLoadingView() {
@@ -281,15 +299,30 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
   }
 
   void _showSuccessMessage() {
-    showCupertinoModalPopup(
+    final status = Provider.of<TroubleReportViewModel>(context, listen: false).lastSubmissionStatus;
+    
+    String title = 'Erfolg';
+    String message = 'Störungsmeldung erfolgreich verarbeitet.';
+    
+    if (status == SubmissionStatus.queuedOffline) {
+      title = 'Offline gespeichert';
+      message = 'Ihre Störungsmeldung wurde gespeichert und wird automatisch gesendet, sobald eine Internetverbindung verfügbar ist.';
+    } else if (status == SubmissionStatus.sentSuccess) {
+      title = 'Erfolgreich gesendet';
+      message = 'Ihre Störungsmeldung wurde erfolgreich übermittelt. Wir werden uns in Kürze bei Ihnen melden.';
+    }
+    
+    showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('Erfolg'),
-        message: const Text('Ihre Störungsmeldung wurde erfolgreich übermittelt. Wir werden uns in Kürze bei Ihnen melden.'),
+      barrierDismissible: true,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(message),
         actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(context).pop(),
+          CupertinoDialogAction(
+            isDefaultAction: true,
             child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),
@@ -308,43 +341,6 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildErrorView(String errorMessage) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              CupertinoIcons.exclamationmark_triangle,
-              color: CupertinoColors.destructiveRed,
-              size: 60,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Ein Fehler ist aufgetreten',
-              style: CupertinoTheme.of(context).textTheme.navTitleTextStyle,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              errorMessage,
-              style: CupertinoTheme.of(context).textTheme.textStyle,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            CupertinoButton.filled(
-              onPressed: () {
-                Provider.of<TroubleReportViewModel>(context, listen: false).reset();
-              },
-              child: const Text('Erneut versuchen'),
-            ),
-          ],
-        ),
       ),
     );
   }
