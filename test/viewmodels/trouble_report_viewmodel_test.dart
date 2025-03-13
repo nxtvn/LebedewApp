@@ -1,16 +1,18 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:lebedew_app/domain/repositories/trouble_report_repository.dart';
-import 'package:lebedew_app/domain/entities/trouble_report.dart';
 import 'package:lebedew_app/domain/enums/request_type.dart';
 import 'package:lebedew_app/domain/enums/urgency_level.dart';
 import 'package:lebedew_app/presentation/common/viewmodels/trouble_report_viewmodel.dart';
 
 // Generiere Mock-Klassen
 @GenerateMocks([TroubleReportRepository])
-import 'trouble_report_viewmodel_test.mocks.dart';
+// Kommentiere den Import aus, bis die Mocks generiert wurden
+// import 'trouble_report_viewmodel_test.mocks.dart';
+
+// Temporärer Mock für Tests
+class MockTroubleReportRepository extends Mock implements TroubleReportRepository {}
 
 void main() {
   late TroubleReportViewModel viewModel;
@@ -45,7 +47,7 @@ void main() {
     viewModel.setType(RequestType.maintenance);
     viewModel.setUrgencyLevel(UrgencyLevel.high);
     viewModel.setHasMaintenanceContract(true);
-    viewModel.setEnergySources(['Gas', 'Strom']);
+    viewModel.setEnergySources({'Gas', 'Strom'});
 
     expect(viewModel.name, equals('Test User'));
     expect(viewModel.email, equals('test@example.com'));
@@ -55,7 +57,7 @@ void main() {
     expect(viewModel.type, equals(RequestType.maintenance));
     expect(viewModel.urgencyLevel, equals(UrgencyLevel.high));
     expect(viewModel.hasMaintenanceContract, isTrue);
-    expect(viewModel.energySources, equals(['Gas', 'Strom']));
+    expect(viewModel.energySources, equals({'Gas', 'Strom'}));
   });
 
   test('TroubleReportViewModel sollte zurückgesetzt werden können', () {
@@ -84,8 +86,8 @@ void main() {
   });
 
   test('TroubleReportViewModel sollte eine Störungsmeldung senden können', () async {
-    // Konfiguriere den Mock
-    when(mockRepository.submitTroubleReport(any, any))
+    // Konfiguriere den Mock, um jeden Aufruf zu akzeptieren
+    when(mockRepository.submitReport(any, any))
         .thenAnswer((_) async => true);
 
     viewModel.setName('Test User');
@@ -95,12 +97,13 @@ void main() {
     final success = await viewModel.submitReport();
 
     expect(success, isTrue);
-    verify(mockRepository.submitTroubleReport(any, any)).called(1);
+    // Verifiziere, dass submitReport aufgerufen wurde
+    verify(mockRepository.submitReport(any, any)).called(1);
   });
 
   test('TroubleReportViewModel sollte Fehler beim Senden behandeln', () async {
     // Konfiguriere den Mock, um einen Fehler zu simulieren
-    when(mockRepository.submitTroubleReport(any, any))
+    when(mockRepository.submitReport(any, any))
         .thenAnswer((_) async => false);
 
     viewModel.setName('Test User');
@@ -110,6 +113,7 @@ void main() {
     final success = await viewModel.submitReport();
 
     expect(success, isFalse);
-    verify(mockRepository.submitTroubleReport(any, any)).called(1);
+    // Verifiziere, dass submitReport aufgerufen wurde
+    verify(mockRepository.submitReport(any, any)).called(1);
   });
 } 

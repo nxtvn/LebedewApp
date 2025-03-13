@@ -4,16 +4,51 @@ import 'package:lebedew_app/data/services/email_queue_service.dart';
 import 'package:lebedew_app/domain/entities/trouble_report.dart';
 import 'package:lebedew_app/domain/enums/request_type.dart';
 import 'package:lebedew_app/domain/enums/urgency_level.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-// Mock für PathProvider
-class MockPathProviderPlatform extends Mock
+// Define a class for the mock platform
+class MockPathProviderPlatform extends Fake
     with MockPlatformInterfaceMixin
     implements PathProviderPlatform {
   @override
   Future<String?> getApplicationDocumentsPath() async {
+    return './test/tmp';
+  }
+  
+  // Implement required methods
+  @override
+  Future<String?> getApplicationSupportPath() async {
+    return './test/tmp';
+  }
+  
+  @override
+  Future<String?> getApplicationCachePath() async {
+    return './test/tmp';
+  }
+  
+  @override
+  Future<List<String>?> getExternalStoragePaths({StorageDirectory? type}) async {
+    return ['./test/tmp'];
+  }
+  
+  @override
+  Future<String?> getExternalStoragePath() async {
+    return './test/tmp';
+  }
+  
+  @override
+  Future<List<String>?> getExternalCachePaths() async {
+    return ['./test/tmp'];
+  }
+  
+  @override
+  Future<String?> getDownloadsPath() async {
+    return './test/tmp';
+  }
+  
+  @override
+  Future<String?> getTemporaryPath() async {
     return './test/tmp';
   }
 }
@@ -24,7 +59,8 @@ void main() {
 
   setUp(() async {
     // Setze den Mock für PathProvider
-    PathProviderPlatform.instance = MockPathProviderPlatform();
+    final mockPathProvider = MockPathProviderPlatform();
+    PathProviderPlatform.instance = mockPathProvider;
     
     // Erstelle temporäres Verzeichnis für Tests
     tempDir = await Directory('./test/tmp').create(recursive: true);

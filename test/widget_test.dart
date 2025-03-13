@@ -5,10 +5,8 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:get_it/get_it.dart';
 import 'package:lebedew_app/core/config/app_config.dart';
 import 'package:lebedew_app/core/config/injection.dart';
 import 'package:lebedew_app/core/theme/app_theme.dart';

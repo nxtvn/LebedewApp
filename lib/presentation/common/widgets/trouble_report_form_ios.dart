@@ -1,15 +1,17 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../domain/entities/trouble_report.dart';
 import '../../../domain/enums/urgency_level.dart';
 import '../viewmodels/trouble_report_viewmodel.dart';
 import 'trouble_report_form.dart';
 
-class TroubleReportFormIOS extends StatefulWidget {
-  final GlobalKey<FormState> formKey;
-
-  const TroubleReportFormIOS({super.key, required this.formKey});
+class TroubleReportFormIOS extends TroubleReportForm {
+  const TroubleReportFormIOS({
+    Key? key,
+    required GlobalKey<FormState> formKey,
+    required Function(TroubleReport) onSubmit,
+  }) : super(key: key, formKey: formKey, onSubmit: onSubmit);
 
   @override
   State<TroubleReportFormIOS> createState() => TroubleReportFormIOSState();

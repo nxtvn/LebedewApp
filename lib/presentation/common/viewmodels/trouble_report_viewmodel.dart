@@ -5,7 +5,6 @@ import '../../../domain/enums/urgency_level.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import '../../../core/utils/image_utils.dart';
 import 'base_viewmodel.dart';
 
@@ -164,29 +163,33 @@ class TroubleReportViewModel extends BaseViewModel {
     }
   }
 
+  /// Erstellt eine TroubleReport-Entität aus den aktuellen ViewModel-Daten
+  TroubleReport createReport() {
+    return TroubleReport(
+      type: _type ?? RequestType.trouble,
+      name: _name ?? '',
+      email: _email ?? '',
+      phone: _phone,
+      address: _address,
+      hasMaintenanceContract: _hasMaintenanceContract,
+      description: _description ?? '',
+      deviceModel: _deviceModel,
+      manufacturer: _manufacturer,
+      serialNumber: _serialNumber,
+      errorCode: _errorCode,
+      energySources: _energySources,
+      occurrenceDate: _occurrenceDate,
+      serviceHistory: _serviceHistory,
+      urgencyLevel: _urgencyLevel ?? UrgencyLevel.medium,
+      imagesPaths: _imagesPaths,
+    );
+  }
+
   /// Sendet die Störungsmeldung an das Repository
   /// Verwendet die BaseViewModel-Methode runAsyncOperation für konsistente Fehlerbehandlung
   Future<bool> submitReport() async {
     return await runAsyncOperation<bool>(() async {
-      final report = TroubleReport(
-        type: _type ?? RequestType.trouble,
-        name: _name ?? '',
-        email: _email ?? '',
-        phone: _phone,
-        address: _address,
-        hasMaintenanceContract: _hasMaintenanceContract,
-        description: _description ?? '',
-        deviceModel: _deviceModel,
-        manufacturer: _manufacturer,
-        serialNumber: _serialNumber,
-        errorCode: _errorCode,
-        energySources: _energySources,
-        occurrenceDate: _occurrenceDate,
-        serviceHistory: _serviceHistory,
-        urgencyLevel: _urgencyLevel ?? UrgencyLevel.medium,
-        imagesPaths: _imagesPaths,
-      );
-
+      final report = createReport();
       return await _repository.submitReport(report, _images);
     }) ?? false;
   }

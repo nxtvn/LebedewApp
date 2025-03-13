@@ -45,7 +45,17 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
                 children: [
                   SingleChildScrollView(
                     padding: const EdgeInsets.all(16.0),
-                    child: TroubleReportFormIOS(formKey: _formKey),
+                    child: TroubleReportFormIOS(
+                      formKey: _formKey,
+                      onSubmit: (report) async {
+                        final viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
+                        final success = await viewModel.submitReport();
+                        if (success && mounted) {
+                          _showSuccessMessage();
+                          viewModel.reset();
+                        }
+                      },
+                    ),
                   ),
                   Positioned(
                     bottom: 16,
@@ -54,10 +64,9 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
                       padding: const EdgeInsets.all(16),
                       onPressed: () async {
                         if (_formKey.currentState?.validate() ?? false) {
-                          final success = await viewModel.submitReport();
+                          final success = await Provider.of<TroubleReportViewModel>(context, listen: false).submitReport();
                           if (success && mounted) {
-                            _showSuccessMessage(context);
-                            viewModel.reset();
+                            _showSuccessMessage();
                           }
                         }
                       },
@@ -73,7 +82,9 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
     );
   }
 
-  void _showSuccessMessage(BuildContext context) {
+  void _showSuccessMessage() {
+    if (!mounted) return;
+    
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(

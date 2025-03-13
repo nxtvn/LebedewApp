@@ -11,4 +11,16 @@ class PlatformHelper {
   static bool isAndroid() {
     return Platform.isAndroid;
   }
+  
+  /// Erstellt das passende Widget für die aktuelle Plattform
+  static T platformWidget<T>({
+    required T Function() iosBuilder,
+    required T Function() androidBuilder,
+  }) {
+    if (isIOS()) {
+      return iosBuilder();
+    } else {
+      return androidBuilder();
+    }
+  }
 } 

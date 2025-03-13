@@ -8,17 +8,18 @@ import '../../../core/constants/design_constants.dart';
 import '../viewmodels/trouble_report_viewmodel.dart';
 import 'trouble_report_form.dart';
 
-class TroubleReportFormAndroid extends StatefulWidget {
-  final GlobalKey<FormState>? formKey;
-
-  const TroubleReportFormAndroid({Key? key, this.formKey}) : super(key: key);
+class TroubleReportFormAndroid extends TroubleReportForm {
+  const TroubleReportFormAndroid({
+    Key? key,
+    required GlobalKey<FormState> formKey,
+    required Function(TroubleReport) onSubmit,
+  }) : super(key: key, formKey: formKey, onSubmit: onSubmit);
 
   @override
   State<TroubleReportFormAndroid> createState() => _TroubleReportFormAndroidState();
 }
 
 class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> with TroubleReportFormResetMixin {
-  late final GlobalKey<FormState> _formKey;
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -36,7 +37,6 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
   @override
   void initState() {
     super.initState();
-    _formKey = widget.formKey ?? GlobalKey<FormState>();
     _viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
     _initControllers();
   }
@@ -205,7 +205,7 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
   @override
   Widget build(BuildContext context) {
     return Form(
-      key: _formKey,
+      key: widget.formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -690,60 +690,52 @@ class _TroubleReportFormAndroidState extends State<TroubleReportFormAndroid> wit
   }
 
   Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () async {
-          if (_formKey.currentState?.validate() ?? false) {
-            setState(() => _isLoading = true);
-            try {
-              final success = await _viewModel.submitReport();
-              if (success && mounted) {
-                await showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Störungsmeldung erfolgreich gesendet'),
-                    content: const Text(
-                      'Vielen Dank für Ihre Meldung. Wir haben Ihre Störungsmeldung erhalten und werden uns zeitnah mit Ihnen in Verbindung setzen.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _formKey.currentState?.reset();
-                          _viewModel.reset();
-                        },
-                        child: const Text('OK'),
-                      ),
-                    ],
+    return Consumer<TroubleReportViewModel>(
+      builder: (context, viewModel, _) {
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading
+                ? null
+                : () {
+                    if (widget.formKey.currentState!.validate()) {
+                      // Erstelle TroubleReport-Objekt und übergebe es an onSubmit
+                      final report = TroubleReport(
+                        type: viewModel.type ?? RequestType.trouble,
+                        name: viewModel.name ?? '',
+                        email: viewModel.email ?? '',
+                        phone: viewModel.phone,
+                        address: viewModel.address,
+                        hasMaintenanceContract: viewModel.hasMaintenanceContract,
+                        description: viewModel.description ?? '',
+                        deviceModel: viewModel.deviceModel,
+                        manufacturer: viewModel.manufacturer,
+                        serialNumber: viewModel.serialNumber,
+                        errorCode: viewModel.errorCode,
+                        energySources: viewModel.energySources,
+                        occurrenceDate: viewModel.occurrenceDate,
+                        serviceHistory: viewModel.serviceHistory,
+                        urgencyLevel: viewModel.urgencyLevel ?? UrgencyLevel.medium,
+                        imagesPaths: const [],
+                      );
+                      widget.onSubmit(report);
+                    }
+                  },
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: _isLoading
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text(
+                    'Störungsmeldung absenden',
+                    style: TextStyle(fontSize: 16),
                   ),
-                );
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Fehler beim Senden der Störungsmeldung. Bitte versuchen Sie es später erneut.'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            } finally {
-              if (mounted) {
-                setState(() => _isLoading = false);
-              }
-            }
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-        ),
-        child: const Text(
-          'Störungsmeldung absenden',
-          style: TextStyle(fontSize: 16),
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 } 

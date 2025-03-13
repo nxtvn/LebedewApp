@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
-import '../common/widgets/trouble_report_form.dart';
+import 'trouble_report_form_android.dart';
 
 class TroubleReportScreenAndroid extends StatelessWidget {
   const TroubleReportScreenAndroid({Key? key}) : super(key: key);
@@ -43,7 +43,17 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
             } else {
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16.0),
-                child: TroubleReportForm(formKey: _formKey),
+                child: TroubleReportFormAndroid(
+                  formKey: _formKey,
+                  onSubmit: (report) async {
+                    final viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
+                    final success = await viewModel.submitReport();
+                    if (success && mounted) {
+                      _showSuccessMessage();
+                      viewModel.reset();
+                    }
+                  },
+                ),
               );
             }
           },
@@ -56,12 +66,7 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
               if (_formKey.currentState?.validate() ?? false) {
                 final success = await viewModel.submitReport();
                 if (success && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Störungsmeldung erfolgreich gesendet'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  _showSuccessMessage();
                   viewModel.reset();
                 }
               }
@@ -69,6 +74,17 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
             child: const Icon(Icons.send),
           );
         },
+      ),
+    );
+  }
+
+  void _showSuccessMessage() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Störungsmeldung erfolgreich gesendet'),
+        backgroundColor: Colors.green,
       ),
     );
   }

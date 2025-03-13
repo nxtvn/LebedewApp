@@ -5,7 +5,6 @@ import '../common/viewmodels/trouble_report_viewmodel.dart';
 import '../common/widgets/trouble_report_form_android.dart';
 import '../common/widgets/trouble_report_form_ios.dart';
 import '../../core/platform/platform_helper.dart';
-import '../../domain/entities/trouble_report.dart';
 
 class CreateTroubleReportPage extends StatelessWidget {
   const CreateTroubleReportPage({Key? key}) : super(key: key);
@@ -13,10 +12,6 @@ class CreateTroubleReportPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
-    
-    void handleSubmit(TroubleReport report) {
-      viewModel.submitReport();
-    }
     
     if (PlatformHelper.isIOS()) {
       return CupertinoPageScaffold(
@@ -28,6 +23,9 @@ class CreateTroubleReportPage extends StatelessWidget {
             padding: const EdgeInsets.all(16.0),
             child: TroubleReportFormIOS(
               formKey: GlobalKey<FormState>(),
+              onSubmit: (report) async {
+                await viewModel.submitReport();
+              },
             ),
           ),
         ),
@@ -41,6 +39,9 @@ class CreateTroubleReportPage extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: TroubleReportFormAndroid(
             formKey: GlobalKey<FormState>(),
+            onSubmit: (report) async {
+              await viewModel.submitReport();
+            },
           ),
         ),
       );

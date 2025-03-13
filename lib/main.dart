@@ -95,8 +95,8 @@ class MyApp extends StatelessWidget {
         ],
         supportedLocales: const [Locale('de', 'DE')],
         home: const OfflineAwareApp(
-          child: LoginScreen(),
           platform: AppPlatform.ios,
+          child: LoginScreen(),
         ),
       );
     } else {
@@ -112,8 +112,8 @@ class MyApp extends StatelessWidget {
         supportedLocales: const [Locale('de', 'DE')],
         locale: const Locale('de', 'DE'),
         home: const OfflineAwareApp(
-          child: LoginScreen(),
           platform: AppPlatform.android,
+          child: LoginScreen(),
         ),
       );
     }
@@ -145,6 +145,7 @@ class OfflineAwareApp extends StatelessWidget {
     // Für iOS verwenden wir einen CupertinoScaffold
     if (platform == AppPlatform.ios) {
       return CupertinoPageScaffold(
+        navigationBar: null,
         child: OfflineStatusBanner(
           child: child,
         ),
