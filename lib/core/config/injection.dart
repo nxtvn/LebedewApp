@@ -76,6 +76,7 @@ Future<void> setupDependencies() async {
       secretKey: mailjetSecretKey,
       toEmail: serviceEmail,
       queueService: getIt<EmailQueueService>(),
+      networkInfo: getIt<NetworkInfoFacade>(),
     ),
   );
   

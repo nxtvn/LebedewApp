@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import '../../core/security/password_manager.dart';
 import '../../presentation/screens/trouble_report_screen.dart';
+import '../../presentation/screens/privacy_policy_screen.dart';
 
 class LoginScreenIOS extends StatefulWidget {
   const LoginScreenIOS({Key? key}) : super(key: key);
@@ -96,6 +97,21 @@ class _LoginScreenIOSState extends State<LoginScreenIOS> {
                           onPressed: () => _handleLogin(),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           child: const Text('Anmelden'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (context) => const PrivacyPolicyScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Datenschutzerklärung',
+                          style: TextStyle(fontSize: 14),
                         ),
                       ),
                     ],

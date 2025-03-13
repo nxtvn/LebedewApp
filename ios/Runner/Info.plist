@@ -30,6 +30,11 @@
 	<string>Die App benötigt Zugriff auf die Kamera, um Fotos für die Störungsmeldung aufzunehmen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Die App benötigt Zugriff auf die Galerie, um Fotos für die Störungsmeldung auszuwählen.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>http</string>
+		<string>https</string>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

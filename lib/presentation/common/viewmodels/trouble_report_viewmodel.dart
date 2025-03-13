@@ -3,8 +3,10 @@ import '../../../domain/repositories/trouble_report_repository.dart';
 import '../../../domain/enums/request_type.dart';
 import '../../../domain/enums/urgency_level.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:async';
 import '../../../core/utils/image_utils.dart';
 import 'base_viewmodel.dart';
 
@@ -215,8 +217,23 @@ class TroubleReportViewModel extends BaseViewModel {
     }
 
     return await runAsyncOperation<bool>(() async {
-      final report = createReport();
-      return await _repository.submitReport(report, _images);
+      try {
+        final report = createReport();
+        final success = await _repository.submitReport(report, _images);
+        
+        if (!success) {
+          throw Exception('Die Störungsmeldung konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.');
+        }
+        
+        return success;
+      } on SocketException {
+        throw Exception('Keine Internetverbindung. Bitte überprüfen Sie Ihre Netzwerkeinstellungen und versuchen Sie es erneut.');
+      } on TimeoutException {
+        throw Exception('Die Anfrage hat zu lange gedauert. Bitte versuchen Sie es später erneut.');
+      } catch (e) {
+        debugPrint('Fehler beim Senden der Störungsmeldung: $e');
+        throw Exception('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      }
     }) ?? false;
   }
 
@@ -231,30 +248,45 @@ class TroubleReportViewModel extends BaseViewModel {
     }
 
     return await runAsyncOperation<bool>(() async {
-      TroubleReport report = createReport();
-      
-      // Optimize images if available
-      if (report.imagesPaths.isNotEmpty) {
-        final optimizedImagePaths = <String>[];
+      try {
+        TroubleReport report = createReport();
         
-        for (final imagePath in report.imagesPaths) {
-          try {
-            final image = File(imagePath);
-            final optimizedImage = await ImageUtils.optimizeImage(image);
-            optimizedImagePaths.add(optimizedImage.path);
-          } catch (e) {
-            // If optimization fails, use original image path
-            optimizedImagePaths.add(imagePath);
-            debugPrint('Bildoptimierung fehlgeschlagen: $e');
+        // Optimize images if available
+        if (report.imagesPaths.isNotEmpty) {
+          final optimizedImagePaths = <String>[];
+          
+          for (final imagePath in report.imagesPaths) {
+            try {
+              final image = File(imagePath);
+              final optimizedImage = await ImageUtils.optimizeImage(image);
+              optimizedImagePaths.add(optimizedImage.path);
+            } catch (e) {
+              // If optimization fails, use original image path
+              optimizedImagePaths.add(imagePath);
+              debugPrint('Bildoptimierung fehlgeschlagen: $e');
+            }
           }
+          
+          // Update report with optimized image paths
+          report = report.copyWith(imagesPaths: optimizedImagePaths);
         }
         
-        // Update report with optimized image paths
-        report = report.copyWith(imagesPaths: optimizedImagePaths);
+        // Submit report to repository
+        final success = await _repository.submitTroubleReport(report);
+        
+        if (!success) {
+          throw Exception('Die Störungsmeldung konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.');
+        }
+        
+        return success;
+      } on SocketException {
+        throw Exception('Keine Internetverbindung. Bitte überprüfen Sie Ihre Netzwerkeinstellungen und versuchen Sie es erneut.');
+      } on TimeoutException {
+        throw Exception('Die Anfrage hat zu lange gedauert. Bitte versuchen Sie es später erneut.');
+      } catch (e) {
+        debugPrint('Fehler beim Senden der optimierten Störungsmeldung: $e');
+        throw Exception('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
       }
-      
-      // Submit report to repository
-      return await _repository.submitTroubleReport(report);
     }) ?? false;
   }
 
@@ -273,8 +305,20 @@ class TroubleReportViewModel extends BaseViewModel {
       
       setLoaded();
     } catch (e) {
-      setError('Fehler beim Auswählen des Bildes: $e');
-      debugPrint('Fehler beim Bildauswahl: $e');
+      String errorMessage = 'Fehler beim Auswählen des Bildes';
+      
+      if (e is PlatformException) {
+        if (e.code == 'camera_access_denied') {
+          errorMessage = 'Kamerazugriff verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
+        } else if (e.code == 'photo_access_denied') {
+          errorMessage = 'Zugriff auf Fotos verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
+        } else if (e.code == 'permission_denied') {
+          errorMessage = 'Berechtigung verweigert. Bitte erlauben Sie den Zugriff in den Einstellungen.';
+        }
+      }
+      
+      setError(errorMessage);
+      debugPrint('Fehler bei der Bildauswahl: $e');
     }
   }
 

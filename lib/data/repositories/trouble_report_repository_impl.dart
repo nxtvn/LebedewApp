@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../domain/repositories/trouble_report_repository.dart';
 import '../../domain/entities/trouble_report.dart';
@@ -33,20 +34,37 @@ class TroubleReportRepositoryImpl implements TroubleReportRepository {
       // Speichere optimierte Bilder
       final imagePaths = <String>[];
       for (final image in optimizedImages) {
-        final path = await _imageStorageService.saveImage(image);
-        imagePaths.add(path);
+        try {
+          final path = await _imageStorageService.saveImage(image);
+          imagePaths.add(path);
+        } catch (e) {
+          debugPrint('Fehler beim Speichern des Bildes: $e');
+          // Wir setzen den Vorgang fort, auch wenn ein Bild nicht gespeichert werden konnte
+        }
       }
 
       // Erstelle E-Mail-Inhalt
       final emailBody = _createEmailBody(report);
       
       // Sende E-Mail mit Anhängen
-      return await _emailService.sendEmail(
+      final success = await _emailService.sendEmail(
         subject: 'Störungsmeldung: ${report.type.label}',
         body: emailBody,
         toEmail: report.email,
         attachmentPaths: imagePaths,
       );
+      
+      if (!success) {
+        debugPrint('E-Mail konnte nicht gesendet werden');
+      }
+      
+      return success;
+    } on SocketException catch (e) {
+      debugPrint('Netzwerkfehler beim Senden der Störungsmeldung: $e');
+      return false;
+    } on TimeoutException catch (e) {
+      debugPrint('Zeitüberschreitung beim Senden der Störungsmeldung: $e');
+      return false;
     } catch (e) {
       debugPrint('Fehler beim Senden der Störungsmeldung: $e');
       return false;
@@ -78,20 +96,37 @@ class TroubleReportRepositoryImpl implements TroubleReportRepository {
       // Speichere optimierte Bilder
       final imagePaths = <String>[];
       for (final image in optimizedImages) {
-        final path = await _imageStorageService.saveImage(image);
-        imagePaths.add(path);
+        try {
+          final path = await _imageStorageService.saveImage(image);
+          imagePaths.add(path);
+        } catch (e) {
+          debugPrint('Fehler beim Speichern des Bildes: $e');
+          // Wir setzen den Vorgang fort, auch wenn ein Bild nicht gespeichert werden konnte
+        }
       }
 
       // Erstelle E-Mail-Inhalt
       final emailBody = _createEmailBody(report);
       
       // Sende E-Mail mit Anhängen
-      return await _emailService.sendEmail(
+      final success = await _emailService.sendEmail(
         subject: 'Störungsmeldung: ${report.type.label}',
         body: emailBody,
         toEmail: report.email,
         attachmentPaths: imagePaths,
       );
+      
+      if (!success) {
+        debugPrint('E-Mail konnte nicht gesendet werden');
+      }
+      
+      return success;
+    } on SocketException catch (e) {
+      debugPrint('Netzwerkfehler beim Senden der Störungsmeldung: $e');
+      return false;
+    } on TimeoutException catch (e) {
+      debugPrint('Zeitüberschreitung beim Senden der Störungsmeldung: $e');
+      return false;
     } catch (e) {
       debugPrint('Fehler beim Senden der Störungsmeldung: $e');
       return false;

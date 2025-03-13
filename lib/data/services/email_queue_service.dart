@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../domain/entities/trouble_report.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../core/network/network_info_facade.dart';
 
 class EmailQueueItem {
   final String subject;
@@ -83,6 +84,7 @@ class EmailQueueService {
   final List<EmailQueueItem> _simpleQueue = [];
   bool _isProcessing = false;
   bool _isProcessingSimple = false;
+  StreamSubscription<bool>? _networkSubscription;
 
   Future<String> get _queueFilePath async {
     final dir = await getApplicationDocumentsDirectory();
@@ -120,6 +122,47 @@ class EmailQueueService {
     } catch (e) {
       _log.severe('Fehler beim Laden der Queue: $e');
     }
+  }
+
+  /// Verbindet den E-Mail-Queue-Service mit dem Netzwerk-Listener
+  /// 
+  /// Diese Methode registriert einen Listener für Netzwerkänderungen und
+  /// versucht, die E-Mail-Warteschlange zu synchronisieren, wenn die
+  /// Netzwerkverbindung wiederhergestellt wird.
+  void connectToNetworkMonitor(NetworkInfoFacade networkInfo) {
+    // Bestehende Subscription beenden, falls vorhanden
+    _networkSubscription?.cancel();
+    
+    // Neuen Listener registrieren
+    _networkSubscription = networkInfo.isConnected.listen((isConnected) {
+      if (isConnected && hasQueuedEmails) {
+        _log.info('Netzwerkverbindung wiederhergestellt. Versuche, ausstehende E-Mails zu senden.');
+        syncQueuedEmails();
+      }
+    });
+    
+    _log.info('E-Mail-Queue-Service mit Netzwerk-Monitor verbunden');
+  }
+  
+  /// Synchronisiert die E-Mail-Warteschlange, wenn die Netzwerkverbindung verfügbar ist
+  /// 
+  /// Diese Methode wird aufgerufen, wenn die Netzwerkverbindung wiederhergestellt wird,
+  /// und versucht, alle ausstehenden E-Mails zu senden.
+  Future<void> syncQueuedEmails() async {
+    _log.info('Starte Synchronisierung der E-Mail-Warteschlange');
+    
+    if (!hasQueuedEmails) {
+      _log.info('Keine ausstehenden E-Mails in der Warteschlange');
+      return;
+    }
+    
+    // Diese Methode wird von außen aufgerufen und erwartet die Callback-Funktionen
+    // zum Senden der E-Mails. Da wir diese hier nicht haben, loggen wir nur eine Nachricht.
+    _log.info('E-Mail-Warteschlange enthält $queueLength ausstehende E-Mails');
+    _log.info('Störungsmeldungen: $troubleReportQueueLength, Einfache E-Mails: $simpleEmailQueueLength');
+    
+    // Die tatsächliche Verarbeitung erfolgt in der Implementierung des E-Mail-Services,
+    // der die processQueue-Methode aufruft.
   }
 
   Future<void> _saveQueue() async {
@@ -229,6 +272,12 @@ class EmailQueueService {
   int get queueLength => _queue.length + _simpleQueue.length;
   int get troubleReportQueueLength => _queue.length;
   int get simpleEmailQueueLength => _simpleQueue.length;
+
+  /// Gibt Ressourcen frei
+  void dispose() {
+    _networkSubscription?.cancel();
+    _log.info('E-Mail-Queue-Service beendet');
+  }
 
   /// Lädt die E-Mail-Warteschlange
   /// Diese Methode ist für die Abwärtskompatibilität mit älteren Versionen

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/security/password_manager.dart';
 import '../../presentation/screens/trouble_report_screen.dart';
+import '../../presentation/screens/privacy_policy_screen.dart';
 
 class LoginScreenAndroid extends StatefulWidget {
   const LoginScreenAndroid({Key? key}) : super(key: key);
@@ -73,6 +74,20 @@ class _LoginScreenAndroidState extends State<LoginScreenAndroid> {
                                 style: TextStyle(fontSize: 16),
                               ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PrivacyPolicyScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Datenschutzerklärung',
+                            style: TextStyle(fontSize: 14),
                           ),
                         ),
                       ],

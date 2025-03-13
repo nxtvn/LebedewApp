@@ -27,31 +27,53 @@ class ImageUtils {
     int quality = 80,
   }) async {
     _log.info('Optimiere Bild: ${originalImage.path}');
-    final tempDir = await getTemporaryDirectory();
-    final targetPath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
     
-    // Process image in background thread
-    final optimizedBytes = await compute(
-      _processImage,
-      _ImageProcessParams(
-        bytes: await originalImage.readAsBytes(),
-        maxWidth: maxWidth,
-        maxHeight: maxHeight,
-        quality: quality,
-      ),
-    );
-    
-    // Save optimized image
-    final optimizedFile = File(targetPath);
-    await optimizedFile.writeAsBytes(optimizedBytes);
-    
-    final originalSize = await originalImage.length();
-    final optimizedSize = await optimizedFile.length();
-    final compressionRatio = (1 - (optimizedSize / originalSize)) * 100;
-    
-    _log.info('Bild optimiert: ${originalSize ~/ 1024}KB -> ${optimizedSize ~/ 1024}KB (${compressionRatio.toStringAsFixed(1)}% Reduktion)');
-    
-    return optimizedFile;
+    try {
+      // Prüfe, ob die Datei existiert
+      if (!await originalImage.exists()) {
+        throw Exception('Die Bilddatei existiert nicht: ${originalImage.path}');
+      }
+      
+      final tempDir = await getTemporaryDirectory();
+      final targetPath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      
+      // Process image in background thread
+      final optimizedBytes = await compute(
+        _processImage,
+        _ImageProcessParams(
+          bytes: await originalImage.readAsBytes(),
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+          quality: quality,
+        ),
+      );
+      
+      // Save optimized image
+      final optimizedFile = File(targetPath);
+      await optimizedFile.writeAsBytes(optimizedBytes);
+      
+      final originalSize = await originalImage.length();
+      final optimizedSize = await optimizedFile.length();
+      final compressionRatio = (1 - (optimizedSize / originalSize)) * 100;
+      
+      _log.info('Bild optimiert: ${originalSize ~/ 1024} KB -> ${optimizedSize ~/ 1024} KB (${compressionRatio.toStringAsFixed(1)}% Reduktion)');
+      
+      return optimizedFile;
+    } catch (e) {
+      _log.severe('Fehler bei der Bildoptimierung', e);
+      
+      if (e is FileSystemException) {
+        _log.severe('Dateisystemfehler: ${e.message}', e);
+        throw Exception('Fehler beim Zugriff auf die Bilddatei: ${e.message}');
+      } else if (e is OutOfMemoryError) {
+        _log.severe('Speicherfehler bei der Bildverarbeitung', e);
+        throw Exception('Das Bild ist zu groß für die Verarbeitung. Bitte verwenden Sie ein kleineres Bild.');
+      }
+      
+      // Wenn die Optimierung fehlschlägt, geben wir das Originalbild zurück
+      _log.warning('Verwende nicht-optimiertes Originalbild');
+      return originalImage;
+    }
   }
 
   /// Verarbeitet ein Bild im Hintergrund-Thread

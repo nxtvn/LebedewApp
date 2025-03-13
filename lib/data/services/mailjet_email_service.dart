@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:image/image.dart' as img;
 import '../../domain/entities/trouble_report.dart';
 import '../../domain/services/email_service.dart';
 import '../../core/config/app_config.dart';
+import '../../core/network/network_info_facade.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +20,7 @@ class MailjetEmailService implements EmailService {
   final String _secretKey;
   final String _toEmail;
   final EmailQueueService _queueService;
+  final NetworkInfoFacade _networkInfo;
   
   // Zwischengespeicherte Werte für Absender-E-Mail und -Name
   String? _cachedSenderEmail;
@@ -28,15 +31,20 @@ class MailjetEmailService implements EmailService {
     required String secretKey,
     required String toEmail,
     required EmailQueueService queueService,
+    required NetworkInfoFacade networkInfo,
   })  : _apiKey = apiKey,
         _secretKey = secretKey,
         _toEmail = toEmail,
-        _queueService = queueService {
+        _queueService = queueService,
+        _networkInfo = networkInfo {
     // Lade die E-Mail-Warteschlange beim Start
     _queueService.loadQueue().then((_) {
       // Versuche, ausstehende E-Mails zu senden
       _processQueue();
     });
+    
+    // Verbinde den E-Mail-Queue-Service mit dem Netzwerk-Monitor
+    _queueService.connectToNetworkMonitor(_networkInfo);
     
     // Lade die Absender-Informationen
     _loadSenderInfo();
@@ -66,6 +74,13 @@ class MailjetEmailService implements EmailService {
   }
 
   Future<void> _processQueue() async {
+    // Prüfe zuerst, ob eine Netzwerkverbindung besteht
+    final isConnected = await _networkInfo.isCurrentlyConnected;
+    if (!isConnected) {
+      _log.info('Keine Netzwerkverbindung. Queue-Verarbeitung wird übersprungen.');
+      return;
+    }
+    
     // Verarbeite Störungsmeldungen
     await _queueService.processQueue(_sendEmail);
     
@@ -169,14 +184,23 @@ class MailjetEmailService implements EmailService {
       // Bildanhänge vorbereiten
       final attachments = await Future.wait(
         images.map((file) async {
-          final bytes = await _compressImage(file);
-          return {
-            'ContentType': 'image/jpeg',
-            'Filename': file.path.split('/').last,
-            'Base64Content': base64Encode(bytes),
-          };
+          try {
+            final bytes = await _compressImage(file);
+            return {
+              'ContentType': 'image/jpeg',
+              'Filename': file.path.split('/').last,
+              'Base64Content': base64Encode(bytes),
+            };
+          } catch (e) {
+            _log.warning('Fehler beim Verarbeiten des Anhangs: ${file.path}', e);
+            // Fehler bei einzelnen Anhängen sollten nicht den gesamten Sendevorgang abbrechen
+            return null;
+          }
         }),
       );
+
+      // Nur gültige Anhänge verwenden
+      final validAttachments = attachments.where((a) => a != null).toList();
 
       // Service E-Mail Template
       final serviceHtmlBody = '''
@@ -342,7 +366,7 @@ class MailjetEmailService implements EmailService {
               'Subject': 'Neue Störungsmeldung von ${form.name}',
               'TextPart': serviceTextBody,
               'HTMLPart': serviceHtmlBody,
-              if (attachments.isNotEmpty) 'Attachments': attachments,
+              if (validAttachments.isNotEmpty) 'Attachments': validAttachments,
             }
           ],
         }),
@@ -371,7 +395,7 @@ class MailjetEmailService implements EmailService {
               'Subject': 'Bestätigung Ihrer Störungsmeldung',
               'TextPart': customerTextBody,
               'HTMLPart': customerHtmlBody,
-              if (attachments.isNotEmpty) 'Attachments': attachments,
+              if (validAttachments.isNotEmpty) 'Attachments': validAttachments,
             }
           ],
         }),
@@ -475,46 +499,43 @@ class MailjetEmailService implements EmailService {
         }
       }
 
+      // Sende die E-Mail
       final response = await http.post(
         Uri.parse('$_baseUrl/send'),
         headers: headers,
         body: jsonEncode(emailData),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      } else {
-        debugPrint('Failed to send email: ${response.body}');
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        // Versuche, die Fehlermeldung aus der Antwort zu extrahieren
+        String errorMessage = 'Unbekannter Fehler';
+        try {
+          final responseData = jsonDecode(response.body);
+          if (responseData['ErrorMessage'] != null) {
+            errorMessage = responseData['ErrorMessage'];
+          } else if (responseData['Messages'] != null && 
+                    responseData['Messages'][0]['Errors'] != null && 
+                    responseData['Messages'][0]['Errors'].isNotEmpty) {
+            errorMessage = responseData['Messages'][0]['Errors'][0]['ErrorMessage'];
+          }
+        } catch (e) {
+          errorMessage = 'HTTP-Fehler: ${response.statusCode}';
+        }
         
-        // Bei Fehler zur Warteschlange hinzufügen
-        await _queueService.addSimpleEmailToQueue(
-          EmailQueueItem(
-            subject: subject,
-            body: body,
-            toEmail: toEmail,
-            fromEmail: fromEmail,
-            fromName: fromName,
-            attachmentPaths: attachmentPaths,
-          ),
-        );
-        
+        _log.severe('Fehler beim Senden der E-Mail: $errorMessage');
         return false;
       }
+
+      _log.info('E-Mail erfolgreich gesendet');
+      return true;
     } catch (e) {
-      debugPrint('Error sending email: $e');
-      
-      // Bei Ausnahme zur Warteschlange hinzufügen
-      await _queueService.addSimpleEmailToQueue(
-        EmailQueueItem(
-          subject: subject,
-          body: body,
-          toEmail: toEmail,
-          fromEmail: fromEmail,
-          fromName: fromName,
-          attachmentPaths: attachmentPaths,
-        ),
-      );
-      
+      if (e is SocketException) {
+        _log.severe('Netzwerkfehler beim Senden der E-Mail: Keine Verbindung möglich', e);
+      } else if (e is TimeoutException) {
+        _log.severe('Zeitüberschreitung beim Senden der E-Mail', e);
+      } else {
+        _log.severe('Fehler beim Senden der E-Mail', e);
+      }
       return false;
     }
   }
@@ -532,5 +553,11 @@ class MailjetEmailService implements EmailService {
       default:
         return 'application/octet-stream';
     }
+  }
+
+  /// Versucht, alle ausstehenden E-Mails in der Warteschlange zu senden
+  Future<void> syncQueuedEmails() async {
+    _log.info('Synchronisiere E-Mail-Warteschlange');
+    await _processQueue();
   }
 } 
