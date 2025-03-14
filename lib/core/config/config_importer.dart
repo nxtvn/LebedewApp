@@ -116,7 +116,7 @@ class ConfigImporter {
     
     // Überprüfe die gespeicherten Werte zur Bestätigung
     final storedSenderEmail = await AppConfig.senderEmail;
-    _log.info('Gespeicherter Wert für sender_email: ${storedSenderEmail.isEmpty ? "leer" : storedSenderEmail.substring(0, 3) + "***"}');
+    _log.info('Gespeicherter Wert für sender_email: ${storedSenderEmail.isEmpty ? "leer" : "${storedSenderEmail.substring(0, 3)}***"}');
   }
   
   /// Neue Hilfsmethode für Standardkonfiguration

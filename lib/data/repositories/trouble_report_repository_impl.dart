@@ -31,31 +31,17 @@ class TroubleReportRepositoryImpl implements TroubleReportRepository {
         }
       }
 
-      // Speichere optimierte Bilder
-      final imagePaths = <String>[];
-      for (final image in optimizedImages) {
-        try {
-          final path = await _imageStorageService.saveImage(image);
-          imagePaths.add(path);
-        } catch (e) {
-          debugPrint('Fehler beim Speichern des Bildes: $e');
-          // Wir setzen den Vorgang fort, auch wenn ein Bild nicht gespeichert werden konnte
-        }
-      }
-
-      // Erstelle E-Mail-Inhalt
-      final emailBody = _createEmailBody(report);
-      
-      // Sende E-Mail mit Anhängen
-      final success = await _emailService.sendEmail(
-        subject: 'Störungsmeldung: ${report.type.label}',
-        body: emailBody,
-        toEmail: report.email,
-        attachmentPaths: imagePaths,
+      // Verwende die sendTroubleReport-Methode anstelle von sendEmail,
+      // damit sowohl die Service-E-Mail als auch die Kunden-E-Mail gesendet werden
+      final success = await _emailService.sendTroubleReport(
+        form: report,
+        images: optimizedImages,
       );
       
       if (!success) {
-        debugPrint('E-Mail konnte nicht gesendet werden');
+        debugPrint('❌ Störungsmeldung konnte nicht gesendet werden');
+      } else {
+        debugPrint('✅ Störungsmeldung erfolgreich gesendet (Service-E-Mail und Kunden-E-Mail)');
       }
       
       return success;
@@ -79,45 +65,32 @@ class TroubleReportRepositoryImpl implements TroubleReportRepository {
   @override
   Future<bool> submitTroubleReport(TroubleReport report) async {
     try {
-      // Optimiere Bilder
-      final optimizedImages = <File>[];
+      // Erstelle eine Liste von File-Objekten aus den Pfaden
+      final images = <File>[];
       for (final imagePath in report.imagesPaths) {
         try {
           final image = File(imagePath);
-          final optimizedImage = await ImageUtils.optimizeImage(image);
-          optimizedImages.add(optimizedImage);
+          if (await image.exists()) {
+            images.add(image);
+          } else {
+            debugPrint('Bild existiert nicht: $imagePath');
+          }
         } catch (e) {
-          // Bei Fehler das Original verwenden
-          optimizedImages.add(File(imagePath));
-          debugPrint('Fehler bei der Bildoptimierung: $e');
+          debugPrint('Fehler beim Laden des Bildes: $e');
         }
       }
 
-      // Speichere optimierte Bilder
-      final imagePaths = <String>[];
-      for (final image in optimizedImages) {
-        try {
-          final path = await _imageStorageService.saveImage(image);
-          imagePaths.add(path);
-        } catch (e) {
-          debugPrint('Fehler beim Speichern des Bildes: $e');
-          // Wir setzen den Vorgang fort, auch wenn ein Bild nicht gespeichert werden konnte
-        }
-      }
-
-      // Erstelle E-Mail-Inhalt
-      final emailBody = _createEmailBody(report);
-      
-      // Sende E-Mail mit Anhängen
-      final success = await _emailService.sendEmail(
-        subject: 'Störungsmeldung: ${report.type.label}',
-        body: emailBody,
-        toEmail: report.email,
-        attachmentPaths: imagePaths,
+      // Verwende die sendTroubleReport-Methode anstelle von sendEmail,
+      // damit sowohl die Service-E-Mail als auch die Kunden-E-Mail gesendet werden
+      final success = await _emailService.sendTroubleReport(
+        form: report,
+        images: images,
       );
       
       if (!success) {
-        debugPrint('E-Mail konnte nicht gesendet werden');
+        debugPrint('❌ Störungsmeldung konnte nicht gesendet werden');
+      } else {
+        debugPrint('✅ Störungsmeldung erfolgreich gesendet (Service-E-Mail und Kunden-E-Mail)');
       }
       
       return success;
