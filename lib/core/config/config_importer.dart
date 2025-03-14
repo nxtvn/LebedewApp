@@ -65,16 +65,29 @@ class ConfigImporter {
   
   /// Importiert Konfigurationsdaten aus einer Map
   static Future<void> _importConfig(Map<String, dynamic> config) async {
+    _log.info('Beginne mit dem Import der Konfigurationsdaten');
+    
+    // Logging der Struktur, um Fehler zu identifizieren (ohne sensible Werte zu zeigen)
+    _log.info('Konfigurationsstruktur: ${config.keys.toList()}');
+    if (config.containsKey('mailjet')) {
+      _log.info('Mailjet-Abschnitt gefunden mit Schlüsseln: ${config['mailjet'].keys.toList()}');
+    }
+    if (config.containsKey('email')) {
+      _log.info('Email-Abschnitt gefunden mit Schlüsseln: ${config['email'].keys.toList()}');
+    }
+    
     // Mailjet-Konfiguration
     if (config.containsKey('mailjet')) {
       final mailjet = config['mailjet'];
       
       if (mailjet.containsKey('apiKey')) {
         await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, mailjet['apiKey']);
+        _log.info('Mailjet API-Key gespeichert');
       }
       
       if (mailjet.containsKey('secretKey')) {
         await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, mailjet['secretKey']);
+        _log.info('Mailjet Secret-Key gespeichert');
       }
     }
     
@@ -83,17 +96,27 @@ class ConfigImporter {
       final email = config['email'];
       
       if (email.containsKey('serviceEmail')) {
-        await AppConfig.setApiKey(ConfigKeys.serviceEmail, email['serviceEmail']);
+        final serviceEmail = email['serviceEmail'];
+        await AppConfig.setApiKey(ConfigKeys.serviceEmail, serviceEmail);
+        _log.info('Service-E-Mail gespeichert: ${serviceEmail.substring(0, 3)}***');
       }
       
       if (email.containsKey('senderEmail')) {
-        await AppConfig.setApiKey(ConfigKeys.senderEmail, email['senderEmail']);
+        final senderEmail = email['senderEmail'];
+        await AppConfig.setApiKey(ConfigKeys.senderEmail, senderEmail);
+        _log.info('Absender-E-Mail gespeichert: ${senderEmail.substring(0, 3)}***');
       }
       
       if (email.containsKey('senderName')) {
-        await AppConfig.setApiKey(ConfigKeys.senderName, email['senderName']);
+        final senderName = email['senderName'];
+        await AppConfig.setApiKey(ConfigKeys.senderName, senderName);
+        _log.info('Absender-Name gespeichert: $senderName');
       }
     }
+    
+    // Überprüfe die gespeicherten Werte zur Bestätigung
+    final storedSenderEmail = await AppConfig.senderEmail;
+    _log.info('Gespeicherter Wert für sender_email: ${storedSenderEmail.isEmpty ? "leer" : storedSenderEmail.substring(0, 3) + "***"}');
   }
   
   /// Neue Hilfsmethode für Standardkonfiguration

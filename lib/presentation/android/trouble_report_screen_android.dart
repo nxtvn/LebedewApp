@@ -88,6 +88,10 @@ class TroubleReportScreenAndroid extends StatelessWidget {
       message = 'Ihre Störungsmeldung wurde gespeichert und wird automatisch gesendet, sobald eine Internetverbindung verfügbar ist.';
     } else if (status == SubmissionStatus.sentSuccess) {
       message = 'Ihre Störungsmeldung wurde erfolgreich übermittelt. Wir werden uns in Kürze bei Ihnen melden.';
+      
+      // Formular zurücksetzen nach erfolgreichem Senden
+      final viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
+      viewModel.reset();
     }
      
     // Zeige passende Nachricht an

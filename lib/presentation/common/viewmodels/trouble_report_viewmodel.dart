@@ -610,6 +610,9 @@ class TroubleReportViewModel extends BaseViewModel {
     _imagesPaths.clear();
     _images.clear();
     
+    // Lösche den gespeicherten Formular-Status
+    clearSavedFormState();
+    
     notifyListeners();
   }
   

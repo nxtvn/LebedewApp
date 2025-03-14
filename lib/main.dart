@@ -17,6 +17,7 @@ import 'domain/services/email_service.dart';
 import 'domain/services/image_storage_service.dart';
 import 'presentation/common/widgets/offline_status_banner.dart';
 import 'presentation/screens/login_screen.dart';
+import 'core/config/config_importer.dart';
 
 void main() async {
   // Initialisiere Flutter-Binding
@@ -85,6 +86,22 @@ Future<void> _initializeConfig() async {
     env: env,
     resetSecureStorage: false, // Auf true setzen, um alle gespeicherten Werte zurückzusetzen
   );
+  
+  // Lade die externe Konfigurationsdatei aus den Assets
+  try {
+    log.info('Lade externe Konfigurationsdatei aus Assets');
+    
+    // Importiere die Konfiguration aus der config.json Datei
+    final success = await ConfigImporter.importFromAsset('assets/config/config.json');
+    
+    if (success) {
+      log.info('Konfiguration aus Assets erfolgreich geladen');
+    } else {
+      log.warning('Fehler beim Laden der Konfiguration aus Assets. Verwende Standardwerte.');
+    }
+  } catch (e) {
+    log.severe('Fehler beim Laden der Konfigurationsdatei: $e');
+  }
   
   // Initialisiere Env für Abwärtskompatibilität
   await Env.initialize();

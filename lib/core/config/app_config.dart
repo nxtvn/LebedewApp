@@ -106,7 +106,7 @@ class AppConfig {
         await setApiKey(ConfigKeys.mailjetApiKey, '3004d543963be32f5dbe4da2329e109c');
         await setApiKey(ConfigKeys.mailjetSecretKey, 'e28fd899034aba79be3b9bf6627f2621');
         await setApiKey(ConfigKeys.serviceEmail, 'service@lebedew.de');
-        await setApiKey(ConfigKeys.senderEmail, 'julian.scherer@nextvision.agency');
+        await setApiKey(ConfigKeys.senderEmail, 'noreply@nextvision.agency');
         await setApiKey(ConfigKeys.senderName, 'Lebedew Haustechnik');
       }
     }
