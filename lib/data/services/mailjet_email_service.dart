@@ -10,6 +10,7 @@ import '../../core/network/network_info_facade.dart';
 import '../../core/network/secure_http_client.dart';
 import 'package:intl/intl.dart';
 import 'email_queue_service.dart';
+import 'package:http/http.dart' as http;
 
 /// Implementierung des E-Mail-Services mit Mailjet
 class MailjetEmailService implements EmailService {
@@ -25,7 +26,7 @@ class MailjetEmailService implements EmailService {
   final String _toEmail;
   final EmailQueueService _queueService;
   final NetworkInfoFacade _networkInfo;
-  final SecureHttpClient _httpClient = SecureHttpClient();
+  final SecureHttpClient _httpClient;
   
   // Zwischengespeicherte Werte für Absender-E-Mail und -Name
   String? _cachedSenderEmail;
@@ -40,11 +41,13 @@ class MailjetEmailService implements EmailService {
     required String toEmail,
     required EmailQueueService queueService,
     required NetworkInfoFacade networkInfo,
+    SecureHttpClient? httpClient,
   })  : _apiKey = apiKey,
         _secretKey = secretKey,
         _toEmail = toEmail,
         _queueService = queueService,
-        _networkInfo = networkInfo {
+        _networkInfo = networkInfo,
+        _httpClient = httpClient ?? SecureHttpClient() {
     // Überprüfe die Credentials und setze Fallback-Werte, falls nötig
     _validateAndFixCredentials();
     
@@ -203,11 +206,27 @@ class MailjetEmailService implements EmailService {
       }
 
       _log.info('Sende E-Mail-Anfrage an Mailjet API');
-      final response = await _httpClient.post(
-        '$_baseUrl/send',
-        headers: headers,
-        body: jsonEncode(emailData),
-      );
+      
+      http.Response? response;
+      try {
+        response = await _httpClient.post(
+          '$_baseUrl/send',
+          headers: headers,
+          body: jsonEncode(emailData),
+        );
+      } catch (e) {
+        if (e.toString().contains('Client is already closed')) {
+          _log.warning('Client war bereits geschlossen, versuche erneut mit neuem Client');
+          // Der Client wurde bereits geschlossen, versuche es erneut mit einem neuen Client
+          response = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: headers,
+            body: jsonEncode(emailData),
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       if (response.statusCode == 401) {
         _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
@@ -490,11 +509,26 @@ class MailjetEmailService implements EmailService {
       _log.info('Sende Service-E-Mail an: $_toEmail');
       
       // Sende die Service-E-Mail
-      final serviceResponse = await _httpClient.post(
-        '$_baseUrl/send',
-        headers: headers,
-        body: jsonEncode(serviceEmailData),
-      );
+      http.Response? serviceResponse;
+      try {
+        serviceResponse = await _httpClient.post(
+          '$_baseUrl/send',
+          headers: headers,
+          body: jsonEncode(serviceEmailData),
+        );
+      } catch (e) {
+        if (e.toString().contains('Client is already closed')) {
+          _log.warning('Client war bereits geschlossen, versuche erneut mit neuem Client');
+          // Der Client wurde bereits geschlossen, versuche es erneut mit einem neuen Client
+          serviceResponse = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: headers,
+            body: jsonEncode(serviceEmailData),
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       // Spezielle Behandlung für 401-Fehler bei der Service-Email
       if (serviceResponse.statusCode == 401) {
@@ -564,11 +598,25 @@ class MailjetEmailService implements EmailService {
       _log.info('Sende Bestätigungs-E-Mail an Kunden: ${form.email}');
 
       // Sende die Kunden-E-Mail
-      final customerResponse = await _httpClient.post(
-        '$_baseUrl/send',
-        headers: headers,
-        body: jsonEncode(customerEmailData),
-      );
+      http.Response? customerResponse;
+      try {
+        customerResponse = await _httpClient.post(
+          '$_baseUrl/send',
+          headers: headers,
+          body: jsonEncode(customerEmailData),
+        );
+      } catch (e) {
+        if (e.toString().contains('Client is already closed')) {
+          _log.warning('Client war bereits geschlossen bei Kunden-E-Mail, versuche erneut mit neuem Client');
+          customerResponse = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: headers,
+            body: jsonEncode(customerEmailData),
+          );
+        } else {
+          throw e;
+        }
+      }
 
       if (!_httpClient.isSuccessful(customerResponse)) {
         _log.severe('Fehler beim Senden der Kunden-E-Mail: ${customerResponse.statusCode} - ${customerResponse.body}');
@@ -700,11 +748,26 @@ class MailjetEmailService implements EmailService {
       _log.info('Sende E-Mail-Anfrage an Mailjet API');
       
       // Sende die E-Mail
-      final response = await _httpClient.post(
-        '$_baseUrl/send',
-        headers: headers,
-        body: jsonEncode(emailData),
-      );
+      http.Response? response;
+      try {
+        response = await _httpClient.post(
+          '$_baseUrl/send',
+          headers: headers,
+          body: jsonEncode(emailData),
+        );
+      } catch (e) {
+        if (e.toString().contains('Client is already closed')) {
+          _log.warning('Client war bereits geschlossen, versuche erneut mit neuem Client');
+          // Der Client wurde bereits geschlossen, versuche es erneut mit einem neuen Client
+          response = await _httpClient.post(
+            '$_baseUrl/send',
+            headers: headers,
+            body: jsonEncode(emailData),
+          );
+        } else {
+          rethrow;
+        }
+      }
       
       // Spezielle Behandlung für 401-Fehler
       if (response.statusCode == 401) {
@@ -785,5 +848,126 @@ class MailjetEmailService implements EmailService {
   Future<void> syncQueuedEmails() async {
     _log.info('Synchronisiere E-Mail-Warteschlange');
     await _processQueue();
+  }
+
+  /// Löscht sensible Daten aus dem Speicher
+  /// 
+  /// Diese Methode überschreibt die sensiblen Daten im Speicher mit 
+  /// zufälligen Werten, bevor die Referenzen gelöscht werden.
+  void securelyWipeCredentials() {
+    _log.info('Lösche Mailjet-Credentials sicher aus dem Speicher');
+    
+    // Überschreibe API-Schlüssel mit zufälligen Daten
+    _apiKey = AppConfig.securelyWipeValue(_apiKey);
+    _secretKey = AppConfig.securelyWipeValue(_secretKey);
+    
+    // Lösche zwischengespeicherte Absenderinformationen
+    if (_cachedSenderEmail != null) {
+      _cachedSenderEmail = AppConfig.securelyWipeValue(_cachedSenderEmail!);
+      _cachedSenderEmail = null;
+    }
+    
+    if (_cachedSenderName != null) {
+      _cachedSenderName = AppConfig.securelyWipeValue(_cachedSenderName!);
+      _cachedSenderName = null;
+    }
+    
+    _log.info('Mailjet-Credentials sicher gelöscht');
+  }
+
+  /// Löscht eine Datei sicher
+  /// 
+  /// Diese Methode überschreibt den Inhalt einer Datei mit zufälligen Daten,
+  /// bevor sie gelöscht wird, um sicherzustellen, dass die Daten nicht wiederhergestellt werden können.
+  Future<void> securelyDeleteFile(File file) async {
+    try {
+      if (await file.exists()) {
+        _log.info('Lösche Datei sicher: ${file.path}');
+        
+        // Hole die Dateigröße
+        final fileSize = await file.length();
+        
+        // Erstelle zufällige Daten
+        final random = List.generate(
+          fileSize > 1024 ? 1024 : fileSize.toInt(), 
+          (index) => (DateTime.now().microsecondsSinceEpoch % 256)
+        );
+        
+        // Überschreibe die Datei mehrmals mit zufälligen Daten
+        for (int i = 0; i < 3; i++) {
+          final sink = file.openWrite(mode: FileMode.writeOnly);
+          
+          // Bei großen Dateien überschreiben wir in Blöcken
+          for (int offset = 0; offset < fileSize; offset += 1024) {
+            sink.add(random);
+          }
+          
+          await sink.flush();
+          await sink.close();
+        }
+        
+        // Lösche die Datei
+        await file.delete();
+        _log.info('Datei sicher gelöscht: ${file.path}');
+      }
+    } catch (e) {
+      _log.warning('Fehler beim sicheren Löschen der Datei ${file.path}: $e');
+      // Versuche, die Datei trotzdem zu löschen
+      try {
+        await file.delete();
+      } catch (deleteError) {
+        _log.severe('Konnte Datei nicht löschen: ${file.path}');
+      }
+    }
+  }
+
+  /// Bereinigt temporäre Dateien, die für die E-Mail-Queue verwendet wurden
+  Future<void> _cleanupTemporaryFiles() async {
+    try {
+      // Versuche, das temporäre Verzeichnis zu finden und zu bereinigen
+      final tempDir = Directory.systemTemp;
+      if (await tempDir.exists()) {
+        final entities = await tempDir.list(recursive: true).toList();
+        
+        for (final entity in entities) {
+          if (entity is File && entity.path.contains('mailjet_temp')) {
+            await securelyDeleteFile(entity);
+          } else if (entity is Directory && entity.path.contains('mailjet_temp')) {
+            try {
+              await entity.delete(recursive: true);
+              _log.info('Temporäres Verzeichnis gelöscht: ${entity.path}');
+            } catch (e) {
+              _log.warning('Fehler beim Löschen des temporären Verzeichnisses: $e');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      _log.warning('Fehler beim Bereinigen temporärer Dateien: $e');
+    }
+  }
+
+  /// Gibt alle Ressourcen frei und löscht sensible Daten aus dem Speicher
+  /// 
+  /// Diese Methode sollte aufgerufen werden, wenn der Service nicht mehr benötigt wird,
+  /// z.B. wenn die Anwendung geschlossen wird oder der Benutzer sich abmeldet.
+  @override
+  void dispose() {
+    _log.info('Gebe MailjetEmailService-Ressourcen frei');
+    
+    // Lösche sensible Daten aus dem Speicher
+    securelyWipeCredentials();
+    
+    // Schließe alle offenen Verbindungen
+    try {
+      _httpClient.close();
+    } catch (e) {
+      _log.warning('Fehler beim Schließen des HTTP-Clients: $e');
+    }
+    
+    // Lösche temporäre Dateien aus der Queue
+    _cleanupTemporaryFiles();
+    
+    _log.info('MailjetEmailService-Ressourcen freigegeben');
   }
 } 

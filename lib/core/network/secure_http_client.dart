@@ -15,8 +15,19 @@ class SecureHttpClient {
   static const Duration _connectTimeout = Duration(seconds: 10);
   static const Duration _receiveTimeout = Duration(seconds: 30);
   
-  // HTTP-Client mit Timeout
-  final http.Client _client = http.Client();
+  // Client-Manager
+  http.Client? _client;
+  bool _isClientClosed = false;
+  
+  /// Erstellt einen neuen HTTP-Client, wenn der aktuelle Client geschlossen ist
+  http.Client _getClient() {
+    if (_client == null || _isClientClosed) {
+      _log.info('Erstelle neuen HTTP-Client');
+      _client = http.Client();
+      _isClientClosed = false;
+    }
+    return _client!;
+  }
   
   /// Führt eine GET-Anfrage aus
   ///
@@ -29,8 +40,11 @@ class SecureHttpClient {
     final secureUrl = _ensureHttps(url);
     _log.info('GET-Anfrage an $secureUrl');
     
+    // Erstelle einen neuen Client für diese Anfrage
+    final client = _getClient();
+    
     try {
-      final response = await _client.get(
+      final response = await client.get(
         Uri.parse(secureUrl),
         headers: headers,
       ).timeout(_connectTimeout);
@@ -56,8 +70,11 @@ class SecureHttpClient {
     final secureUrl = _ensureHttps(url);
     _log.info('POST-Anfrage an $secureUrl');
     
+    // Erstelle einen neuen Client für diese Anfrage
+    final client = _getClient();
+    
     try {
-      final response = await _client.post(
+      final response = await client.post(
         Uri.parse(secureUrl),
         headers: headers,
         body: body,
@@ -122,6 +139,9 @@ class SecureHttpClient {
       _log.severe('Formatfehler bei $method-Anfrage an $url: ${error.message}');
     } else if (error is HttpException) {
       _log.severe('HTTP-Fehler bei $method-Anfrage an $url: ${error.message}');
+    } else if (error.toString().contains('Client is already closed')) {
+      _log.severe('Client ist bereits geschlossen bei $method-Anfrage an $url');
+      _isClientClosed = true;
     } else {
       _log.severe('Unbekannter Fehler bei $method-Anfrage an $url: $error');
     }
@@ -134,6 +154,10 @@ class SecureHttpClient {
   
   /// Schließt den HTTP-Client
   void close() {
-    _client.close();
+    if (_client != null && !_isClientClosed) {
+      _log.info('Schließe HTTP-Client');
+      _client!.close();
+      _isClientClosed = true;
+    }
   }
 } 
