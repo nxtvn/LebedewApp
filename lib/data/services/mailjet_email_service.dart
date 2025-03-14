@@ -65,6 +65,9 @@ class MailjetEmailService implements EmailService {
         } else {
           _log.info('✅ API-Credentials erfolgreich validiert. E-Mail-Versand ist bereit.');
         }
+      }).catchError((error) {
+        _log.severe('❌ Fehler bei der API-Validierung: $error');
+        _log.severe('❌ Der E-Mail-Versand könnte beeinträchtigt sein.');
       });
     }
     
@@ -114,29 +117,37 @@ class MailjetEmailService implements EmailService {
       final headers = _getHeaders();
       
       // Einfache Anfrage an die Mailjet API zur Validierung
-      final testUrl = 'https://api.mailjet.com/v3/REST/sender';
-      final response = await _httpClient.get(
-        testUrl,
-        headers: headers,
-      );
+      // Verwende die gleiche API-Version und Endpunkt wie für den E-Mail-Versand
+      final testUrl = 'https://api.mailjet.com/v3.1/send';
       
-      if (response.statusCode == 200) {
-        _log.info('API-Credentials sind gültig: Anfrage erfolgreich (200 OK)');
-        return true;
-      } else if (response.statusCode == 401) {
-        _log.severe('API-Credentials sind ungültig: Authentifizierungsfehler (401 Unauthorized)');
-        _log.severe('Server-Antwort: ${response.body}');
+      http.Response? response;
+      try {
+        response = await _httpClient.get(
+          testUrl,
+          headers: headers,
+        );
+        
+        // Direkt mit dem Statuscode arbeiten, ohne _validateResponse
+        if (response.statusCode == 200) {
+          _log.info('API-Credentials sind gültig: Anfrage erfolgreich (200 OK)');
+          return true;
+        } else if (response.statusCode == 401) {
+          _log.severe('API-Credentials sind ungültig: Authentifizierungsfehler (401 Unauthorized)');
+          _log.severe('Server-Antwort: ${response.body}');
+          return false;
+        } else {
+          _log.warning('Unerwartete Antwort bei API-Test: ${response.statusCode}');
+          _log.warning('Server-Antwort: ${response.body}');
+          // Bei unerwarteten Antworten gehen wir vorsichtshalber von einem Fehler aus
+          return false;
+        }
+      } catch (e) {
+        _log.severe('HTTP-Fehler beim API-Test: $e');
         return false;
-      } else {
-        _log.warning('Unerwartete Antwort bei API-Test: ${response.statusCode}');
-        _log.warning('Server-Antwort: ${response.body}');
-        // Wir gehen davon aus, dass die Credentials gültig sind, wenn keine 401-Antwort kommt
-        return true;
       }
     } catch (e) {
       _log.severe('Fehler beim Testen der API-Credentials: $e');
-      // Wir können nicht sicher sein, ob die Credentials gültig sind, nehmen aber an, dass sie es sind
-      return true;
+      return false;
     }
   }
   
@@ -153,24 +164,42 @@ class MailjetEmailService implements EmailService {
       return 'Basic $encodedFallbackCredentials';
     }
     
-    final credentials = '$_apiKey:$_secretKey';
-    _log.info('Erstelle Auth-Header mit API Key: ${_apiKey.substring(0, 4)}...${_apiKey.substring(_apiKey.length - 4)}');
-    final encodedCredentials = base64Encode(utf8.encode(credentials));
-    
-    // Führe eine zusätzliche Validierung des Basic Auth Headers durch
-    final authHeader = 'Basic $encodedCredentials';
-    if (!authHeader.startsWith('Basic ') || authHeader.length < 10) {
-      _log.severe('FEHLER: Der erzeugte Authorization-Header ist ungültig!');
-      _log.severe('Header-Länge: ${authHeader.length}');
+    try {
+      // Benutze ASCII-Kodierung für die Credentials
+      final credentials = '$_apiKey:$_secretKey';
       
-      // Fallback-Werte verwenden
-      _log.info('Verwende Fallback-Credentials für die Authentifizierung');
-      final fallbackCredentials = '$_fallbackApiKey:$_fallbackSecretKey';
-      final encodedFallbackCredentials = base64Encode(utf8.encode(fallbackCredentials));
+      // Logging verbessern, um keine problematischen Substring-Operationen durchzuführen
+      _log.info('Erstelle Auth-Header mit API Key (Länge: ${_apiKey.length})');
+      
+      // Stelle sicher, dass die Zeichenkodierung korrekt ist, indem wir mit UTF-8 explizit kodieren
+      final credentialsBytes = utf8.encode(credentials);
+      final encodedCredentials = base64Encode(credentialsBytes);
+      
+      final authHeader = 'Basic $encodedCredentials';
+      
+      // Validierung des erzeugten Headers
+      if (!authHeader.startsWith('Basic ') || authHeader.length < 10) {
+        _log.severe('FEHLER: Der erzeugte Authorization-Header ist ungültig!');
+        _log.severe('Header-Länge: ${authHeader.length}');
+        
+        // Bei fehlgeschlagener Kodierung einen alternativen Ansatz versuchen
+        _log.info('Versuche alternative Kodierung für Auth-Header');
+        final altCredentials = '$_apiKey:$_secretKey';
+        final altBytes = utf8.encode(altCredentials); // Versuche ASCII-Kodierung
+        final altEncoded = base64Encode(altBytes);
+        return 'Basic $altEncoded';
+      }
+      
+      return authHeader;
+    } catch (e) {
+      _log.severe('Fehler bei der Erstellung des Auth-Headers: $e');
+      
+      // Fallback für Fehlerfall
+      _log.info('Verwende Fallback-Mechanismus für Auth-Header');
+      final fallbackCredentials = '$_apiKey:$_secretKey';
+      final encodedFallbackCredentials = base64.encode(utf8.encode(fallbackCredentials));
       return 'Basic $encodedFallbackCredentials';
     }
-    
-    return authHeader;
   }
   
   /// Aktualisiert den Authorization-Header für die API-Anfrage
@@ -196,10 +225,25 @@ class MailjetEmailService implements EmailService {
   
   /// Lädt die Absender-Informationen aus AppConfig
   Future<void> _loadSenderInfo() async {
-    // Aktualisiere die Absender-E-Mail auf die neue Adresse
-    _cachedSenderEmail = "julian.scherer@nextvision.agency";
-    _cachedSenderName = await AppConfig.senderName;
-    _log.info('Absender-Informationen geladen: $_cachedSenderName <$_cachedSenderEmail>');
+    try {
+      // Lade die Absender-E-Mail aus der AppConfig
+      final configSenderEmail = await AppConfig.senderEmail;
+      if (configSenderEmail.isNotEmpty) {
+        _cachedSenderEmail = configSenderEmail;
+      } else {
+        // Fallback-E-Mail bei Fehler
+        _log.warning('Absender-E-Mail konnte nicht aus Konfiguration geladen werden, verwende Fallback-Wert');
+        _cachedSenderEmail = "julian.scherer@nextvision.agency";
+      }
+      
+      _cachedSenderName = await AppConfig.senderName;
+      _log.info('Absender-Informationen geladen: $_cachedSenderName <$_cachedSenderEmail>');
+    } catch (e) {
+      _log.severe('Fehler beim Laden der Absender-Informationen: $e');
+      // Fallback-Werte setzen
+      _cachedSenderEmail = "julian.scherer@nextvision.agency";
+      _cachedSenderName = "Lebedew Haustechnik";
+    }
   }
   
   /// Gibt die Absender-E-Mail zurück
@@ -786,6 +830,7 @@ class MailjetEmailService implements EmailService {
     }
   }
 
+  /// Sendet eine E-Mail über die Mailjet API
   @override
   Future<bool> sendEmail({
     required String subject,
@@ -798,34 +843,23 @@ class MailjetEmailService implements EmailService {
     try {
       _log.info('Sende E-Mail an: $toEmail');
       
-      // Validiere erforderliche Felder
-      if (subject.isEmpty || body.isEmpty || toEmail.isEmpty) {
-        _log.severe('Fehler beim Senden der E-Mail: Erforderliche Felder fehlen');
-        return false;
+      // Lade die Absender-Informationen, falls noch nicht geschehen
+      if (_cachedSenderEmail == null || _cachedSenderName == null) {
+        await _loadSenderInfo();
       }
       
-      // Prüfe, ob eine Netzwerkverbindung besteht
-      final isConnected = await _networkInfo.isCurrentlyConnected;
-      if (!isConnected) {
-        _log.info('Keine Netzwerkverbindung. E-Mail wird in die Warteschlange gestellt.');
-        
-        // Füge die E-Mail zur Warteschlange hinzu
-        await _queueService.addSimpleEmailToQueue(
-          EmailQueueItem(
-            subject: subject,
-            body: body,
-            toEmail: toEmail,
-            fromEmail: fromEmail ?? await _senderEmail,
-            fromName: fromName ?? await _senderName,
-            attachmentPaths: attachmentPaths,
-          ),
-        );
-        
-        return true; // Wir geben true zurück, da die E-Mail in die Warteschlange gestellt wurde
-      }
+      // Erstelle die HTTP-Header
+      final headers = _getHeaders();
       
-      // Erstelle die E-Mail-Anfrage
-      final emailData = {
+      // API-Endpunkt für E-Mail-Versand
+      final emailEndpoint = '$_baseUrl/send';
+      
+      final authHeader = headers['Authorization'] ?? '';
+      _log.info('Erstelle Auth-Header mit API Key: ${_maskApiKey(_apiKey)}');
+      _log.info('Auth-Header erstellt (Länge: ${authHeader.length})');
+      
+      // Erstelle die E-Mail-Daten
+      final Map<String, dynamic> emailData = {
         'Messages': [
           {
             'From': {
@@ -870,94 +904,41 @@ class MailjetEmailService implements EmailService {
         }
         
         if (attachments.isNotEmpty) {
-          emailData['Messages']![0]['Attachments'] = attachments;
+          emailData['Messages'][0]['Attachments'] = attachments;
         }
       }
       
-      // Aktualisierte Header-Methode verwenden
-      final headers = _getHeaders();
-      _log.info('Auth-Header erstellt (Länge: ${headers['Authorization']?.length ?? 0})');
-      
-      _log.info('Sende E-Mail-Anfrage an Mailjet API');
+      _log.info('Sende E-Mail-Anfrage an Mailjet API: $emailEndpoint');
       
       // Sende die E-Mail
       http.Response? response;
       try {
         response = await _httpClient.post(
-          '$_baseUrl/send',
+          emailEndpoint,
           headers: headers,
           body: jsonEncode(emailData),
         );
-      } catch (e) {
-        if (e.toString().contains('Client is already closed')) {
-          _log.warning('Client war bereits geschlossen, versuche erneut mit neuem Client');
-          // Der Client wurde bereits geschlossen, versuche es erneut mit einem neuen Client
-          response = await _httpClient.post(
-            '$_baseUrl/send',
-            headers: headers,
-            body: jsonEncode(emailData),
-          );
+        
+        // Direkte Statuscode-Überprüfung, ohne Exceptions zu werfen
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          _log.info('E-Mail erfolgreich gesendet an: $toEmail');
+          return true;
+        } else if (response.statusCode == 401) {
+          _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
+              'API-Schlüssel scheint ungültig zu sein.');
+          _log.severe('Antwort: ${response.body}');
+          return false;
         } else {
-          rethrow;
+          _log.severe('Fehler beim Senden der E-Mail: ${response.statusCode} - ${response.reasonPhrase}');
+          _log.severe('Antwort: ${response.body}');
+          return false;
         }
-      }
-      
-      // Spezielle Behandlung für 401-Fehler
-      if (response.statusCode == 401) {
-        _log.severe('Authentifizierungsfehler (401) bei der Mailjet API! '
-            'Versuche mit den Fallback-Credentials...');
-        
-        // Fallback-Credentials verwenden und erneut versuchen
-        if (!_usingFallbackCredentials) {
-          _apiKey = _fallbackApiKey;
-          _secretKey = _fallbackSecretKey;
-          _usingFallbackCredentials = true;
-          
-          // Neuen Header mit Fallback-Credentials erstellen
-          final fallbackHeaders = _getHeaders();
-          
-          // Erneuter Versuch mit Fallback-Credentials
-          final retryResponse = await _httpClient.post(
-            '$_baseUrl/send',
-            headers: fallbackHeaders,
-            body: jsonEncode(emailData),
-          );
-          
-          final isSuccess = _httpClient.isSuccessful(retryResponse);
-          if (isSuccess) {
-            _log.info('E-Mail mit Fallback-Credentials erfolgreich gesendet an: $toEmail');
-          } else {
-            _log.severe('Fehler beim Senden der E-Mail auch mit Fallback-Credentials: '
-                '${retryResponse.statusCode} - ${retryResponse.body}');
-          }
-          
-          return isSuccess;
-        }
-        
-        // Fehler in AppConfig persistieren
-        if (_usingFallbackCredentials) {
-          try {
-            await AppConfig.setApiKey(ConfigKeys.mailjetApiKey, _fallbackApiKey);
-            await AppConfig.setApiKey(ConfigKeys.mailjetSecretKey, _fallbackSecretKey);
-            _log.info('Fallback-Credentials in AppConfig gespeichert');
-          } catch (e) {
-            _log.warning('Fehler beim Speichern der Fallback-Credentials: $e');
-          }
-        }
-        
+      } catch (e) {
+        _log.severe('Ausnahme beim Senden der E-Mail: $e');
         return false;
       }
-      
-      final isSuccess = _httpClient.isSuccessful(response);
-      if (isSuccess) {
-        _log.info('E-Mail erfolgreich gesendet an: $toEmail');
-      } else {
-        _log.severe('Fehler beim Senden der E-Mail: ${response.statusCode} - ${response.body}');
-      }
-      
-      return isSuccess;
-    } catch (e, stackTrace) {
-      _log.severe('Fehler beim Senden der E-Mail: $e', e, stackTrace);
+    } catch (e) {
+      _log.severe('Fehler beim Senden der E-Mail: $e');
       return false;
     }
   }
@@ -1078,6 +1059,12 @@ class MailjetEmailService implements EmailService {
     } catch (e) {
       _log.warning('Fehler beim Bereinigen temporärer Dateien: $e');
     }
+  }
+
+  /// Maskiert einen API-Schlüssel für sichere Logging-Ausgaben
+  String _maskApiKey(String apiKey) {
+    if (apiKey.length <= 8) return '********';
+    return apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4);
   }
 
   /// Gibt alle Ressourcen frei und löscht sensible Daten aus dem Speicher

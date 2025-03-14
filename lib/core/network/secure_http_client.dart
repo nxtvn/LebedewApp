@@ -106,6 +106,14 @@ class SecureHttpClient {
   void _validateResponse(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _log.warning('HTTP-Fehler: ${response.statusCode} - ${response.reasonPhrase}');
+      
+      // Detaillierteres Logging für Authentifizierungsfehler
+      if (response.statusCode == 401) {
+        _log.severe('Authentifizierungsfehler (401) - API-Schlüssel könnte ungültig sein');
+        _log.severe('Anfrage-URL: ${response.request?.url}');
+        _log.severe('Anfrage-Headers: ${_sanitizeHeaders(response.request?.headers)}');
+      }
+      
       _log.warning('Antwort: ${response.body}');
       throw HttpException(
         'HTTP-Fehler: ${response.statusCode} - ${response.reasonPhrase}',
@@ -127,6 +135,20 @@ class SecureHttpClient {
         throw FormatException('Ungültige JSON-Antwort: ${e.toString()}');
       }
     }
+  }
+  
+  /// Entfernt sensible Informationen aus den Headers für Logging-Zwecke
+  String _sanitizeHeaders(Map<String, String>? headers) {
+    if (headers == null) return 'null';
+    
+    final sanitizedHeaders = Map<String, String>.from(headers);
+    
+    // Sensible Headers maskieren
+    if (sanitizedHeaders.containsKey('Authorization')) {
+      sanitizedHeaders['Authorization'] = 'Basic ********';
+    }
+    
+    return sanitizedHeaders.toString();
   }
   
   /// Behandelt Fehler bei HTTP-Anfragen

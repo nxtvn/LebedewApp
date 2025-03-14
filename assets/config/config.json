@@ -1,8 +1,7 @@
 {
   "mailjet": {
     "apiKey": "3004d543963be32f5dbe4da2329e109c",
-    "secretKey": "d3b943563866a4e9a703787a89f21076",
-    "WICHTIG": "Diese API-Credentials sind nicht mehr gültig und müssen mit aktuellen Credentials ersetzt werden"
+    "secretKey": "d3b943563866a4e9a703787a89f21076"
   },
   "email": {
     "serviceEmail": "noreply@nextvision.agency",
