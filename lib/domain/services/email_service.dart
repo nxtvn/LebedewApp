@@ -22,4 +22,10 @@ abstract class EmailService {
     String? fromName,
     List<String>? attachmentPaths,
   });
+  
+  /// Gibt alle Ressourcen frei und löscht sensible Daten aus dem Speicher
+  /// 
+  /// Diese Methode sollte aufgerufen werden, wenn der Service nicht mehr benötigt wird,
+  /// z.B. wenn die Anwendung geschlossen wird oder der Benutzer sich abmeldet.
+  void dispose();
 } 

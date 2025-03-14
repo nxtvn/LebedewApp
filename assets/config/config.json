@@ -1,0 +1,11 @@
+{
+  "mailjet": {
+    "apiKey": "3004d543963be32f5dbe4da2329e109c",
+    "secretKey": "e28fd899034aba79be3b9bf6627f2621"
+  },
+  "email": {
+    "serviceEmail": "Julian.Scherer@nextvision.agency",
+    "senderEmail": "noreply@example.com",
+    "senderName": "Lebedew Haustechnik"
+  }
+} 

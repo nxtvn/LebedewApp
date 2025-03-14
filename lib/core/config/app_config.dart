@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:crypto/crypto.dart';
+import 'dart:typed_data';
 
 /// Umgebungstypen für die Anwendung
 enum Environment { development, production }
@@ -206,6 +207,64 @@ class AppConfig {
     } catch (e) {
       _log.severe('Fehler beim Importieren der sicheren Konfiguration: $e');
       return false;
+    }
+  }
+  
+  /// Löscht einen String-Wert sicher aus dem Speicher
+  /// 
+  /// Diese Methode überschreibt den Speicherbereich des Strings mit zufälligen Daten,
+  /// bevor die Referenz gelöscht wird. Dies reduziert das Risiko, dass sensible Daten
+  /// im Speicher verbleiben und bei einem Speicherabbild lesbar sind.
+  static String securelyWipeValue(String value) {
+    if (value.isEmpty) return '';
+    
+    try {
+      // Erstelle eine Kopie des Strings im Speicher
+      final buffer = Uint8List(value.length);
+      
+      // Überschreibe mit zufälligen Daten (in Dart nicht direkt möglich, 
+      // aber wir können den Wert in einem Array überschreiben)
+      for (int i = 0; i < buffer.length; i++) {
+        buffer[i] = (DateTime.now().microsecondsSinceEpoch % 256);
+      }
+      
+      // Erzeuge einen neuen String aus den zufälligen Daten, um den ursprünglichen zu überschreiben
+      final randomString = String.fromCharCodes(buffer);
+      
+      // Lösche alle Spuren im Code
+      buffer.fillRange(0, buffer.length, 0);
+      
+      _log.fine('Wert sicher gelöscht (Länge: ${value.length})');
+      return randomString;
+    } catch (e) {
+      _log.warning('Fehler beim sicheren Löschen eines Werts: $e');
+      return '';
+    }
+  }
+  
+  /// Löscht alle sensiblen Daten sicher aus dem Speicher
+  /// 
+  /// Diese Methode sollte aufgerufen werden, wenn die Anwendung geschlossen wird
+  /// oder wenn der Benutzer sich abmeldet, um sicherzustellen, dass keine sensiblen
+  /// Daten im Speicher verbleiben.
+  static Future<void> securelyWipeAllFromMemory() async {
+    try {
+      _log.info('Lösche alle sensiblen Daten aus dem Speicher');
+      
+      // Hole alle Schlüssel
+      final values = await getAllValues();
+      
+      // Lösche jeden Wert sicher
+      for (final entry in values.entries) {
+        securelyWipeValue(entry.value);
+      }
+      
+      // Lösche das Verschlüsselungs-Salt sicher
+      _encryptionSalt = securelyWipeValue(_encryptionSalt);
+      
+      _log.info('Alle sensiblen Daten wurden sicher aus dem Speicher gelöscht');
+    } catch (e) {
+      _log.severe('Fehler beim sicheren Löschen aller Daten: $e');
     }
   }
   

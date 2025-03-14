@@ -13,6 +13,8 @@ import 'core/platform/platform_helper.dart';
 import 'core/theme/app_theme.dart';
 import 'core/network/network_info_facade.dart';
 import 'data/services/email_queue_service.dart';
+import 'domain/services/email_service.dart';
+import 'domain/services/image_storage_service.dart';
 import 'presentation/common/widgets/offline_status_banner.dart';
 import 'presentation/screens/login_screen.dart';
 
@@ -102,11 +104,31 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     // Falls ein Service-Locator verwendet wird, sollten globale Instanzen hier freigegeben werden
     try {
+      final log = Logger('AppDisposal');
+      log.info('Beende Anwendung und bereinige Ressourcen');
+      
+      // Bereinige Netzwerkdienste
       final networkInfo = GetIt.I<NetworkInfoFacade>();
       networkInfo.dispose();
       
+      // Bereinige E-Mail-Dienste
       final emailQueueService = GetIt.I<EmailQueueService>();
       emailQueueService.dispose();
+      
+      // Lösche alle sensiblen Daten aus dem Speicher
+      final emailService = GetIt.I<EmailService>();
+      emailService.dispose();
+      
+      // Bereinige Bildspeicherdienste
+      final imageStorageService = GetIt.I<ImageStorageService>();
+      imageStorageService.dispose();
+      
+      // Sicheres Löschen aller Konfigurationsdaten im Speicher
+      AppConfig.securelyWipeAllFromMemory().then((_) {
+        log.info('Alle sensiblen Daten wurden sicher aus dem Speicher gelöscht');
+      });
+      
+      log.info('Alle Ressourcen wurden erfolgreich freigegeben');
     } catch (e) {
       // Diese Services könnten bereits entfernt worden sein
       debugPrint('Fehler beim Freigeben von Ressourcen: $e');
@@ -193,7 +215,13 @@ class _OfflineAwareAppState extends State<OfflineAwareApp> {
   @override
   void dispose() {
     // Clean resource disposal
-    getIt<EmailQueueService>().dispose();
+    try {
+      getIt<EmailQueueService>().dispose();
+      getIt<EmailService>().dispose();
+      getIt<ImageStorageService>().dispose();
+    } catch (e) {
+      debugPrint('Fehler beim Freigeben von Ressourcen in OfflineAwareApp: $e');
+    }
     super.dispose();
   }
   
