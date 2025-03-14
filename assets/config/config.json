@@ -1,11 +1,12 @@
 {
   "mailjet": {
     "apiKey": "3004d543963be32f5dbe4da2329e109c",
-    "secretKey": "e28fd899034aba79be3b9bf6627f2621"
+    "secretKey": "d3b943563866a4e9a703787a89f21076",
+    "WICHTIG": "Diese API-Credentials sind nicht mehr gültig und müssen mit aktuellen Credentials ersetzt werden"
   },
   "email": {
-    "serviceEmail": "Julian.Scherer@nextvision.agency",
-    "senderEmail": "noreply@example.com",
+    "serviceEmail": "noreply@nextvision.agency",
+    "senderEmail": "noreply@nextvision.agency",
     "senderName": "Lebedew Haustechnik"
   }
 } 
