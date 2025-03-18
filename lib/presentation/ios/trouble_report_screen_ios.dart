@@ -1,43 +1,32 @@
 import 'package:flutter/cupertino.dart';
 import 'package:get_it/get_it.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../common/viewmodels/trouble_report_viewmodel.dart';
 import 'trouble_report_form_ios.dart';
 import '../../domain/entities/trouble_report.dart';
 import '../../core/utils/error_handler.dart';
-import '../../data/repositories/trouble_report_repository_impl.dart';
-import '../../domain/services/email_service.dart';
-import '../../domain/services/image_storage_service.dart';
 import '../../core/network/network_info_facade.dart';
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
+import 'package:uuid/uuid.dart';
 
-class TroubleReportScreenIOS extends StatelessWidget {
+class TroubleReportScreenIOS extends ConsumerWidget {
   const TroubleReportScreenIOS({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    // Services aus dem GetIt Container holen
-    final emailService = GetIt.instance<EmailService>();
-    final imageStorageService = GetIt.instance<ImageStorageService>();
-    
-    return ChangeNotifierProvider<TroubleReportViewModel>(
-      create: (context) => TroubleReportViewModel(
-        TroubleReportRepositoryImpl(emailService, imageStorageService)
-      ),
-      child: const _TroubleReportView(),
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    return const _TroubleReportView();
   }
 }
 
-class _TroubleReportView extends StatefulWidget {
+class _TroubleReportView extends ConsumerStatefulWidget {
   const _TroubleReportView();
 
   @override
-  State<_TroubleReportView> createState() => _TroubleReportViewState();
+  ConsumerState<_TroubleReportView> createState() => _TroubleReportViewState();
 }
 
-class _TroubleReportViewState extends State<_TroubleReportView> {
+class _TroubleReportViewState extends ConsumerState<_TroubleReportView> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
   bool _isOffline = false;
@@ -79,8 +68,9 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TroubleReportViewModel>(
-      builder: (context, viewModel, child) {
+    return Consumer(
+      builder: (context, ref, child) {
+        final viewModel = ref.watch(troubleReportViewModelProvider);
         return CupertinoPageScaffold(
           navigationBar: const CupertinoNavigationBar(
             middle: Text('Störungsmeldung'),
@@ -317,7 +307,6 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: TroubleReportFormIOS(
-                  formKey: _formKey,
                   onSubmit: (report) => _submitReport(report, viewModel),
                 ),
               ),
@@ -559,6 +548,7 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
       
       // Erstelle TroubleReport-Objekt
       final report = TroubleReport(
+        id: const Uuid().v4(),
         type: viewModel.type,
         name: viewModel.name ?? '',
         email: viewModel.email ?? '',
@@ -586,7 +576,7 @@ class _TroubleReportViewState extends State<_TroubleReportView> {
   }
 
   void _showSuccessMessage() {
-    final status = Provider.of<TroubleReportViewModel>(context, listen: false).lastSubmissionStatus;
+    final status = ref.read(troubleReportViewModelProvider).lastSubmissionStatus;
     
     String title = 'Erfolg';
     String message = 'Störungsmeldung erfolgreich verarbeitet.';

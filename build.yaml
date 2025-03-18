@@ -1,0 +1,30 @@
+targets:
+  $default:
+    builders:
+      freezed:
+        options:
+          # Optionen für Freezed
+          copy_with: true
+          equal: true
+          to_string: true
+          from_json: true
+          to_json: true
+          
+      json_serializable:
+        options:
+          # Optionen für json_serializable
+          any_map: false
+          checked: false
+          create_factory: true
+          create_to_json: true
+          disallow_unrecognized_keys: false
+          explicit_to_json: true
+          field_rename: snake
+          generic_argument_factories: false
+          ignore_unannotated: false
+          include_if_null: true
+      
+      riverpod_generator:
+        options:
+          # Optionen für Riverpod
+          provider_name_suffix: "Provider" 

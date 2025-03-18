@@ -15,9 +15,13 @@ import '../../../data/services/email_queue_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+import '../../../core/logging/app_logger.dart';
 import 'base_viewmodel.dart';
 import '../../../core/platform/platform_helper.dart';
 import '../../../core/utils/error_handler.dart';
+import 'package:uuid/uuid.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../infrastructure/providers/repository_providers.dart';
 
 /// Status der Berichtsübermittlung
 enum SubmissionStatus {
@@ -27,15 +31,24 @@ enum SubmissionStatus {
   error
 }
 
+/// Provider für das TroubleReportViewModel
+final troubleReportViewModelProvider = Provider<TroubleReportViewModel>((ref) {
+  final repository = ref.read(troubleReportRepositoryProvider);
+  return TroubleReportViewModel(repository);
+});
+
 /// ViewModel für die Störungsmeldung
 ///
 /// Dieses ViewModel dient als Vermittler zwischen der UI und dem Repository.
 /// Es verwaltet den Zustand der Störungsmeldung und bietet Methoden zum Bearbeiten
 /// und Absenden der Daten.
 class TroubleReportViewModel extends BaseViewModel {
+  // Logging-Instanz
+  final _log = AppLogger.getLogger('TroubleReportViewModel');
+  
+  // Repository für die Speicherung und Abruf von Störungsmeldungen
   final TroubleReportRepository _repository;
   final ImagePicker _picker = ImagePicker();
-  static final _log = Logger('TroubleReportViewModel');
   
   // Formularfelder
   String? _name;
@@ -173,14 +186,16 @@ class TroubleReportViewModel extends BaseViewModel {
   void setPreviousIssues(String? value) => setStringField('previousIssues', value);
 
   void setType(RequestType? value) {
-    if (value != null && _type != value) {
+    if (value != null) {
+      _log.info('Typ gesetzt auf: ${value.toString()}');
       _type = value;
       notifyListeners();
     }
   }
 
   void setUrgencyLevel(UrgencyLevel? value) {
-    if (value != null && _urgencyLevel != value) {
+    if (value != null) {
+      _log.info('Dringlichkeitsstufe gesetzt auf: ${value.toString()}');
       _urgencyLevel = value;
       notifyListeners();
     }
@@ -243,6 +258,7 @@ class TroubleReportViewModel extends BaseViewModel {
   /// Erstellt eine TroubleReport-Entität aus den aktuellen ViewModel-Daten
   TroubleReport createReport() {
     return TroubleReport(
+      id: const Uuid().v4(),
       type: _type,
       name: _name ?? '',
       email: _email ?? '',

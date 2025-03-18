@@ -1,22 +1,60 @@
-enum UrgencyLevel {
-  low(
-    label: 'Niedrig',
-    description: 'Das Problem beeinträchtigt die Nutzung des Geräts nicht wesentlich. Eine Bearbeitung innerhalb der nächsten Woche ist ausreichend.',
-  ),
-  medium(
-    label: 'Mittel',
-    description: 'Das Problem beeinträchtigt die Nutzung des Geräts teilweise. Eine Bearbeitung innerhalb der nächsten 2-3 Tage ist wünschenswert.',
-  ),
-  high(
-    label: 'Hoch',
-    description: 'Das Problem verhindert die Nutzung des Geräts vollständig. Eine schnellstmögliche Bearbeitung ist erforderlich.',
-  );
+import 'package:json_annotation/json_annotation.dart';
 
-  final String label;
-  final String description;
+/// Dringlichkeitsstufe einer Störung
+@JsonEnum()
+enum UrgencyLevel {
+  @JsonValue('low')
+  low,
   
-  const UrgencyLevel({
-    required this.label,
-    required this.description,
-  });
+  @JsonValue('medium')
+  medium,
+  
+  @JsonValue('high')
+  high,
+  
+  @JsonValue('critical')
+  critical;
+  
+  String get displayName {
+    switch (this) {
+      case UrgencyLevel.low:
+        return 'Niedrig';
+      case UrgencyLevel.medium:
+        return 'Mittel';
+      case UrgencyLevel.high:
+        return 'Hoch';
+      case UrgencyLevel.critical:
+        return 'Kritisch';
+    }
+  }
+  
+  int get priority {
+    switch (this) {
+      case UrgencyLevel.low:
+        return 1;
+      case UrgencyLevel.medium:
+        return 2;
+      case UrgencyLevel.high:
+        return 3;
+      case UrgencyLevel.critical:
+        return 4;
+    }
+  }
+  
+  /// Alias für displayName, für Kompatibilität mit existierendem Code
+  String get label => displayName;
+  
+  /// Beschreibung der Dringlichkeitsstufe
+  String get description {
+    switch (this) {
+      case UrgencyLevel.low:
+        return 'Niedrige Priorität, Bearbeitung innerhalb einer Woche';
+      case UrgencyLevel.medium:
+        return 'Mittlere Priorität, Bearbeitung innerhalb von 2-3 Tagen';
+      case UrgencyLevel.high:
+        return 'Hohe Priorität, Bearbeitung innerhalb von 24 Stunden';
+      case UrgencyLevel.critical:
+        return 'Kritische Priorität, sofortige Bearbeitung';
+    }
+  }
 } 

@@ -687,7 +687,7 @@ class MailjetEmailService implements EmailService {
                 'Name': 'Lebedew Haustechnik',
               }
             ],
-            'Subject': 'Störungsmeldung: ${form.type.label} von ${form.name}',
+            'Subject': 'Störungsmeldung: ${form.type.displayName} von ${form.name}',
             'HTMLPart': serviceHtmlBody,
             if (validAttachments.isNotEmpty) 'Attachments': validAttachments,
           }
@@ -917,8 +917,8 @@ class MailjetEmailService implements EmailService {
     return '''
       <h2>Neue Störungsmeldung</h2>
       <h3>Art des Anliegens</h3>
-      <p><strong>Typ:</strong> ${form.type.label}</p>
-      <p><strong>Dringlichkeit:</strong> ${form.urgencyLevel.label}</p>
+      <p><strong>Typ:</strong> ${form.type.displayName}</p>
+      <p><strong>Dringlichkeit:</strong> ${form.urgencyLevel.displayName}</p>
       <p><strong>Datum der Meldung:</strong> $reportDate</p>
       
       <h3>Kontaktdaten</h3>
@@ -977,8 +977,8 @@ class MailjetEmailService implements EmailService {
       <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h3 style="color: #1976D2;">Details Ihrer Meldung</h3>
         
-        <p><strong>Meldungstyp:</strong> ${form.type.label}</p>
-        <p><strong>Dringlichkeit:</strong> ${form.urgencyLevel.label}</p>
+        <p><strong>Meldungstyp:</strong> ${form.type.displayName}</p>
+        <p><strong>Dringlichkeit:</strong> ${form.urgencyLevel.displayName}</p>
         <p><strong>Beschreibung:</strong> $htmlSafeDescription</p>
         
         $deviceModelHtml

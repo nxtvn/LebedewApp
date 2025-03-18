@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:logging/logging.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'core/config/app_config.dart';
 import 'core/config/env.dart';
@@ -34,12 +34,8 @@ void main() async {
   
   // Starte die App
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AppTheme>(
-          create: (_) => AppTheme(),
-        ),
-      ],
+    // Wrapping der gesamten App mit ProviderScope für Riverpod
+    ProviderScope(
       child: const MyApp(),
     ),
   );
@@ -176,7 +172,7 @@ class _MyAppState extends State<MyApp> {
       return MaterialApp(
         title: AppConstants.appTitle,
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme.copyWith(),
+        theme: AppTheme.lightTheme.copyWith(), // Verwende statisches Feld
         builder: (context, child) {
           return ScaffoldMessenger(
             child: child ?? const SizedBox.shrink(),

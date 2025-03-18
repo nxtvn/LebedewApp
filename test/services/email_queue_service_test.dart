@@ -86,7 +86,8 @@ void main() {
 
   test('EmailQueueService sollte eine Störungsmeldung zur Queue hinzufügen können', () async {
     // Erstelle eine Test-Störungsmeldung
-    final report = TroubleReport(
+    const report = TroubleReport(
+      id: 'test-id-1',
       name: 'Test User',
       email: 'test@example.com',
       description: 'Test Description',
@@ -124,7 +125,8 @@ void main() {
 
   test('EmailQueueService sollte die Queue verarbeiten können', () async {
     // Erstelle eine Test-Störungsmeldung
-    final report = TroubleReport(
+    const report = TroubleReport(
+      id: 'test-id-2',
       name: 'Test User',
       email: 'test@example.com',
       description: 'Test Description',

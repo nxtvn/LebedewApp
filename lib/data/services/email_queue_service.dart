@@ -5,6 +5,10 @@ import '../../domain/entities/trouble_report.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/network/network_info_facade.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import '../../domain/enums/request_type.dart';
+import '../../domain/enums/urgency_level.dart';
 
 class EmailQueueItem {
   final String subject;
@@ -80,11 +84,17 @@ class EmailQueueService {
   static final _log = Logger('EmailQueueService');
   static const String _queueFileName = 'email_queue.json';
   static const String _simpleQueueFileName = 'simple_email_queue.json';
+  static const String _queueKey = 'email_queue';
   final List<QueuedEmail> _queue = [];
   final List<EmailQueueItem> _simpleQueue = [];
   bool _isProcessing = false;
   bool _isProcessingSimple = false;
   StreamSubscription<bool>? _networkSubscription;
+
+  EmailQueueService() {
+    _loadQueue();
+    _startSyncTimer();
+  }
 
   Future<String> get _queueFilePath async {
     final dir = await getApplicationDocumentsDirectory();
@@ -294,5 +304,67 @@ class EmailQueueService {
   /// Diese Methode ist für die Abwärtskompatibilität mit älteren Versionen
   Future<void> loadQueue() async {
     await initialize();
+  }
+
+  /// Fügt eine E-Mail zur Warteschlange hinzu
+  Future<void> enqueueEmail({
+    required String to,
+    required String subject,
+    required String body,
+    List<String> attachmentPaths = const [],
+  }) async {
+    final email = QueuedEmail(
+      report: TroubleReport(
+        id: const Uuid().v4(),
+        type: RequestType.trouble,
+        urgencyLevel: UrgencyLevel.medium,
+        name: 'System',
+        email: to,
+        description: body,
+        imagesPaths: attachmentPaths,
+      ),
+      imagePaths: attachmentPaths,
+      timestamp: DateTime.now(),
+    );
+    
+    _queue.add(email);
+    await _saveQueue();
+  }
+  
+  /// Gibt die nächste E-Mail aus der Warteschlange zurück, ohne sie zu entfernen
+  QueuedEmail? get nextEmail {
+    if (_queue.isEmpty) return null;
+    return _queue.first;
+  }
+  
+  /// Entfernt die nächste E-Mail aus der Warteschlange
+  Future<void> dequeueEmail() async {
+    if (_queue.isNotEmpty) {
+      _queue.removeAt(0);
+      await _saveQueue();
+    }
+  }
+  
+  /// Lädt die Warteschlange aus den SharedPreferences
+  Future<void> _loadQueue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final queueJson = prefs.getString(_queueKey);
+      
+      if (queueJson != null) {
+        final List<dynamic> decoded = json.decode(queueJson);
+        _queue.clear();
+        _queue.addAll(
+          decoded.map((item) => QueuedEmail.fromJson(item)).toList()
+        );
+      }
+    } catch (e) {
+      // Fehler beim Laden ignorieren, mit leerer Warteschlange fortfahren
+      _queue.clear();
+    }
+  }
+  
+  /// Startet einen Timer zum regelmäßigen Synchen der Warteschlange
+  void _startSyncTimer() {
   }
 } 

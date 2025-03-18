@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
@@ -13,19 +13,21 @@ import '../../domain/enums/request_type.dart';
 import '../../domain/enums/urgency_level.dart';
 import '../../core/logging/app_logger.dart';
 import 'dart:ui' show ImageFilter;
+import 'package:flutter/foundation.dart';
 
-class TroubleReportFormIOS extends TroubleReportForm {
+class TroubleReportFormIOS extends ConsumerStatefulWidget {
+  final Function(TroubleReport) onSubmit;
+
   const TroubleReportFormIOS({
     Key? key,
-    required GlobalKey<FormState> formKey,
-    required Function(TroubleReport) onSubmit,
-  }) : super(key: key, formKey: formKey, onSubmit: onSubmit);
+    required this.onSubmit,
+  }) : super(key: key);
 
   @override
-  State<TroubleReportFormIOS> createState() => _TroubleReportFormIOSState();
+  ConsumerState<TroubleReportFormIOS> createState() => _TroubleReportFormIOSState();
 }
 
-class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with TroubleReportFormResetMixin {
+class _TroubleReportFormIOSState extends ConsumerState<TroubleReportFormIOS> with TroubleReportFormResetMixin {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -41,6 +43,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   late TroubleReportViewModel _viewModel;
   bool _isLoading = false;
   DateTime? _selectedDate;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   
   // Logger für diese Klasse
   final _log = AppLogger.getLogger('TroubleReportFormIOS');
@@ -52,12 +55,19 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   void initState() {
     super.initState();
     _log.info('TroubleReportFormIOS initialisiert');
-    _viewModel = Provider.of<TroubleReportViewModel>(context, listen: false);
+    _viewModel = ref.read(troubleReportViewModelProvider);
+    
+    // Aktualisiere das ViewModel mit leeren Standardwerten, falls keine Werte vorhanden sind
+    _viewModel.setType(_viewModel.type);
+    _viewModel.setUrgencyLevel(_viewModel.urgencyLevel);
     
     // Versuche, gespeicherten Formularstatus zu laden
     _viewModel.loadFormState().then((hasState) {
-      _initControllers();
-      _log.info('Formularstatus geladen: ${hasState ? 'erfolgreich' : 'kein gespeicherter Status'}');
+      if (hasState) {
+        _updateControllersFromViewModel();
+        // UI aktualisieren nach dem Laden der Daten
+        if (mounted) setState(() {});
+      }
     });
     
     // Setze einen Timer, um regelmäßig den Formularstatus zu speichern
@@ -69,7 +79,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
     });
   }
 
-  void _initControllers() {
+  void _updateControllersFromViewModel() {
     _nameController.text = _viewModel.name ?? '';
     _emailController.text = _viewModel.email ?? '';
     _phoneController.text = _viewModel.phone ?? '';
@@ -488,7 +498,8 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
 
-  Widget _buildImagePreview(BuildContext context, int index) {
+  Widget? _buildImagePreview(BuildContext context, int index) {
+    final viewModel = ref.read(troubleReportViewModelProvider);
     final bool isGridView = MediaQuery.of(context).size.width < 400;
     final double imageSize = isGridView ? 130 : 140;
     
@@ -518,7 +529,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             children: [
               // Bild
               Image.file(
-                _viewModel.images[index],
+                viewModel.images[index],
                 fit: BoxFit.cover,
               ),
               
@@ -549,7 +560,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                 child: CupertinoButton(
                   padding: EdgeInsets.zero,
                   minSize: 0,
-                  onPressed: () => _viewModel.removeImage(index),
+                  onPressed: () => viewModel.removeImage(index),
                   child: Container(
                     width: 28,
                     height: 28,
@@ -586,7 +597,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '${index + 1}/${_viewModel.images.length}',
+                    '${index + 1}/${viewModel.images.length}',
                     style: const TextStyle(
                       color: CupertinoColors.white,
                       fontSize: 12,
@@ -605,10 +616,13 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
 
   @override
   Widget build(BuildContext context) {
+    // Wir lesen das ViewModel für den Build erneut, um reaktive Updates zu erhalten
+    _viewModel = ref.watch(troubleReportViewModelProvider);
+    
     final padding = _getResponsivePadding(context);
     
     return Form(
-      key: widget.formKey,
+      key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -640,6 +654,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   List<Widget> _buildRequestTypeOptions() {
+    final viewModel = ref.watch(troubleReportViewModelProvider);
     List<Widget> options = [];
     
     // Eine Liste von Optionen für jeden RequestType erstellen
@@ -648,18 +663,24 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: GestureDetector(
-            onTap: () => _viewModel.setType(type),
+            onTap: () {
+              _log.info('Anfordererungstyp geändert auf: ${type.toString()}');
+              debugPrint('Tippen auf Typ: ${type.toString()}');
+              _viewModel.setType(type);
+              setState(() {}); // UI explizit aktualisieren
+            },
+            behavior: HitTestBehavior.opaque, // Stellt sicher, dass der gesamte Bereich reagiert
             child: Container(
               decoration: BoxDecoration(
-                color: _viewModel.type == type 
+                color: viewModel.type == type 
                     ? CupertinoColors.activeBlue.withOpacity(0.1)
                     : CupertinoColors.systemBackground,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _viewModel.type == type
+                  color: viewModel.type == type
                       ? CupertinoColors.activeBlue
                       : CupertinoColors.systemGrey4.resolveFrom(context),
-                  width: _viewModel.type == type ? 2 : 1,
+                  width: viewModel.type == type ? 2 : 1,
                 ),
               ),
               child: Padding(
@@ -670,7 +691,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: _viewModel.type == type
+                        color: viewModel.type == type
                             ? CupertinoColors.activeBlue
                             : CupertinoColors.systemGrey6,
                         shape: BoxShape.circle,
@@ -678,7 +699,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                       child: Center(
                         child: Icon(
                           _getIconForRequestType(type),
-                          color: _viewModel.type == type
+                          color: viewModel.type == type
                               ? CupertinoColors.white
                               : CupertinoColors.activeBlue,
                           size: 24,
@@ -691,13 +712,13 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            type.label,
+                            type.displayName,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: _viewModel.type == type
+                              fontWeight: viewModel.type == type
                                   ? FontWeight.bold
                                   : FontWeight.normal,
-                              color: _viewModel.type == type
+                              color: viewModel.type == type
                                   ? CupertinoColors.activeBlue
                                   : CupertinoColors.label.resolveFrom(context),
                             ),
@@ -714,10 +735,10 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                       ),
                     ),
                     Icon(
-                      _viewModel.type == type
+                      viewModel.type == type
                           ? CupertinoIcons.checkmark_circle_fill
                           : CupertinoIcons.circle,
-                      color: _viewModel.type == type
+                      color: viewModel.type == type
                           ? CupertinoColors.activeBlue
                           : CupertinoColors.systemGrey4,
                       size: 24,
@@ -777,6 +798,12 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         return CupertinoIcons.wrench;
       case RequestType.consultation:
         return CupertinoIcons.chat_bubble_2;
+      case RequestType.installation:
+        return CupertinoIcons.hammer;
+      case RequestType.question:
+        return CupertinoIcons.question_circle;
+      case RequestType.other:
+        return CupertinoIcons.ellipsis_circle;
     }
   }
 
@@ -789,6 +816,12 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
         return 'Vereinbaren Sie einen Termin für die regelmäßige Wartung Ihres Geräts.';
       case RequestType.consultation:
         return 'Beratung zu Produkten, Lösungen oder technischen Fragen.';
+      case RequestType.installation:
+        return 'Informationen oder Hilfe bei der Installation Ihres Geräts.';
+      case RequestType.question:
+        return 'Allgemeine Fragen zu unseren Produkten und Dienstleistungen.';
+      case RequestType.other:
+        return 'Sonstige Anfragen, die nicht in die anderen Kategorien passen.';
     }
   }
 
@@ -930,43 +963,12 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             ),
           ),
         ),
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            return CupertinoFormRow(
-              prefix: const Text('Datum des Vorfalls'),
-              child: GestureDetector(
-                onTap: _showDatePicker,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    viewModel.occurrenceDate != null
-                        ? '${viewModel.occurrenceDate!.day}.${viewModel.occurrenceDate!.month}.${viewModel.occurrenceDate!.year}'
-                        : 'Datum wählen',
-                    style: TextStyle(
-                      color: viewModel.occurrenceDate != null
-                          ? CupertinoColors.label.resolveFrom(context)
-                          : CupertinoColors.placeholderText.resolveFrom(context),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
-            return CupertinoFormRow(
-              prefix: const Text('Wartungsvertrag vorhanden'),
-              child: CupertinoSwitch(
-                value: viewModel.hasMaintenanceContract,
-                onChanged: (value) => viewModel.setHasMaintenanceContract(value),
-              ),
-            );
-          },
-        ),
+        _buildDatePicker(context),
+        _buildMaintenanceContractRow(context),
         // Kundennummer-Feld, das nur angezeigt wird, wenn ein Wartungsvertrag vorhanden ist
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
+        Consumer(
+          builder: (context, ref, _) {
+            final viewModel = ref.watch(troubleReportViewModelProvider);
             if (!viewModel.hasMaintenanceContract) {
               return const SizedBox.shrink();
             }
@@ -989,6 +991,44 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildDatePicker(BuildContext context) {
+    return CupertinoFormRow(
+      prefix: const Text('Datum des Vorfalls'),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          _log.info('Datumsauswahl geöffnet');
+          debugPrint('Tippen auf Datumsauswahl');
+          _showDatePicker();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            _selectedDate != null
+                ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
+                : 'Datum wählen',
+            style: TextStyle(
+              color: _selectedDate != null
+                  ? CupertinoColors.label.resolveFrom(context)
+                  : CupertinoColors.placeholderText.resolveFrom(context),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaintenanceContractRow(BuildContext context) {
+    final viewModel = ref.watch(troubleReportViewModelProvider);
+    return CupertinoFormRow(
+      prefix: const Text('Wartungsvertrag vorhanden'),
+      child: CupertinoSwitch(
+        value: viewModel.hasMaintenanceContract,
+        onChanged: (value) => _viewModel.setHasMaintenanceContract(value),
+      ),
     );
   }
 
@@ -1022,27 +1062,23 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             child: CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: _isLoading ? null : _showImagePickerOptions,
-              child: Consumer<TroubleReportViewModel>(
-                builder: (context, viewModel, _) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        CupertinoIcons.photo_camera,
-                        color: _isLoading ? CupertinoColors.systemGrey : CupertinoColors.activeBlue,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        viewModel.images.isEmpty
-                            ? 'Fotos hinzufügen'
-                            : '${viewModel.images.length} Foto${viewModel.images.length == 1 ? '' : 's'} ausgewählt',
-                        style: TextStyle(
-                          color: _isLoading ? CupertinoColors.systemGrey : null,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    CupertinoIcons.photo_camera,
+                    color: _isLoading ? CupertinoColors.systemGrey : CupertinoColors.activeBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _viewModel.images.isEmpty
+                        ? 'Fotos hinzufügen'
+                        : '${_viewModel.images.length} Foto${_viewModel.images.length == 1 ? '' : 's'} ausgewählt',
+                    style: TextStyle(
+                      color: _isLoading ? CupertinoColors.systemGrey : null,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1099,8 +1135,9 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           ),
 
         // Verbesserte iOS-konforme Bildergalerie
-        Consumer<TroubleReportViewModel>(
-          builder: (context, viewModel, _) {
+        Consumer(
+          builder: (context, ref, _) {
+            final viewModel = ref.watch(troubleReportViewModelProvider);
             if (viewModel.images.isEmpty) {
               return const SizedBox.shrink();
             }
@@ -1156,7 +1193,9 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         itemCount: viewModel.images.length,
-                        itemBuilder: _buildImagePreview,
+                        itemBuilder: (BuildContext context, int index) {
+                          return _buildImagePreview(context, index);
+                        },
                         padding: const EdgeInsets.only(right: 12, bottom: 8),
                       ),
                     ),
@@ -1180,6 +1219,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   List<Widget> _buildUrgencyLevelPicker() {
+    final viewModel = ref.watch(troubleReportViewModelProvider);
     return [
       CupertinoFormRow(
         child: Padding(
@@ -1192,31 +1232,41 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
               switch (level) {
                 case UrgencyLevel.low:
                   color = CupertinoColors.systemGreen;
-                  icon = CupertinoIcons.info;
+                  icon = CupertinoIcons.checkmark_circle;
                   break;
                 case UrgencyLevel.medium:
                   color = CupertinoColors.systemOrange;
-                  icon = CupertinoIcons.exclamationmark_triangle;
+                  icon = CupertinoIcons.exclamationmark_circle;
                   break;
                 case UrgencyLevel.high:
                   color = CupertinoColors.systemRed;
-                  icon = CupertinoIcons.exclamationmark_circle;
+                  icon = CupertinoIcons.exclamationmark_triangle;
+                  break;
+                case UrgencyLevel.critical:
+                  color = CupertinoColors.systemRed.darkColor;
+                  icon = CupertinoIcons.flame;
                   break;
               }
               
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => _viewModel.setUrgencyLevel(level),
+                  onTap: () {
+                    _log.info('Dringlichkeitsstufe geändert auf: ${level.toString()}');
+                    debugPrint('Tippen auf Dringlichkeitsstufe: ${level.toString()}');
+                    _viewModel.setUrgencyLevel(level);
+                    setState(() {}); // UI explizit aktualisieren
+                  },
+                  behavior: HitTestBehavior.opaque, // Stellt sicher, dass der gesamte Bereich reagiert
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _viewModel.urgencyLevel == level
+                      color: viewModel.urgencyLevel == level
                           ? color.withAlpha(20)
                           : CupertinoColors.systemGrey6.resolveFrom(context),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _viewModel.urgencyLevel == level
+                        color: viewModel.urgencyLevel == level
                             ? color
                             : CupertinoColors.systemGrey4.resolveFrom(context),
                       ),
@@ -1226,12 +1276,12 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                         Icon(icon, color: color, size: 24),
                         const SizedBox(height: 8),
                         Text(
-                          level.label,
+                          level.displayName,
                           style: TextStyle(
-                            fontWeight: _viewModel.urgencyLevel == level
+                            fontWeight: viewModel.urgencyLevel == level
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: _viewModel.urgencyLevel == level
+                            color: viewModel.urgencyLevel == level
                                 ? color
                                 : null,
                           ),
@@ -1254,7 +1304,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
             border: Border.all(color: _getUrgencyColor().withAlpha(30)),
           ),
           child: Text(
-            _viewModel.urgencyLevel.description,
+            viewModel.urgencyLevel.description,
             style: TextStyle(color: _getUrgencyColor()),
           ),
         ),
@@ -1263,13 +1313,16 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
   
   Color _getUrgencyColor() {
-    switch (_viewModel.urgencyLevel) {
+    final viewModel = ref.watch(troubleReportViewModelProvider);
+    switch (viewModel.urgencyLevel) {
       case UrgencyLevel.low:
         return CupertinoColors.systemGreen;
       case UrgencyLevel.medium:
         return CupertinoColors.systemOrange;
       case UrgencyLevel.high:
         return CupertinoColors.systemRed;
+      case UrgencyLevel.critical:
+        return CupertinoColors.systemRed.darkColor;
     }
   }
 
@@ -1307,8 +1360,9 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
   }
 
   Widget _buildTermsAcceptanceRow() {
+    final viewModel = ref.watch(troubleReportViewModelProvider);
     // Ermittle, ob wir Fehler anzeigen sollen
-    final bool showError = !_viewModel.hasAcceptedTerms && _viewModel.validationAttempted;
+    final bool showError = !viewModel.hasAcceptedTerms && viewModel.validationAttempted;
     
     // Link-Farbe für den AGB-Text
     const linkColor = CupertinoColors.activeBlue;
@@ -1322,7 +1376,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
           CupertinoButton(
             padding: EdgeInsets.zero,
             pressedOpacity: 0.7,
-            onPressed: () => _viewModel.setHasAcceptedTerms(!_viewModel.hasAcceptedTerms),
+            onPressed: () => _viewModel.setHasAcceptedTerms(!viewModel.hasAcceptedTerms),
             child: Semantics(
               label: 'Allgemeine Geschäftsbedingungen akzeptieren',
               hint: 'Tippen Sie hier, um die Nutzungsbedingungen zu akzeptieren',
@@ -1335,7 +1389,7 @@ class _TroubleReportFormIOSState extends State<TroubleReportFormIOS> with Troubl
                     height: 44,
                     alignment: Alignment.center,
                     child: CupertinoCheckbox(
-                      value: _viewModel.hasAcceptedTerms,
+                      value: viewModel.hasAcceptedTerms,
                       onChanged: (value) {
                         if (value != null) {
                           _viewModel.setHasAcceptedTerms(value);
